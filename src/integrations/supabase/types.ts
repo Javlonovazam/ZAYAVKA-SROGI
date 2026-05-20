@@ -14,16 +14,188 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      order_history: {
+        Row: {
+          action: string
+          created_at: string
+          from_department: Database["public"]["Enums"]["department"] | null
+          id: string
+          note: string | null
+          order_id: string
+          to_department: Database["public"]["Enums"]["department"] | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          from_department?: Database["public"]["Enums"]["department"] | null
+          id?: string
+          note?: string | null
+          order_id: string
+          to_department?: Database["public"]["Enums"]["department"] | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          from_department?: Database["public"]["Enums"]["department"] | null
+          id?: string
+          note?: string | null
+          order_id?: string
+          to_department?: Database["public"]["Enums"]["department"] | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          comment: string
+          created_at: string
+          current_department: Database["public"]["Enums"]["department"]
+          deadline: string | null
+          doors_count: number
+          entered_current_dept_at: string
+          filial: string
+          finished_at: string | null
+          id: string
+          number: string
+          pogonaj_required: boolean
+          pogonaj_status: string
+          position_deadlines: Json
+          product_type: string
+          status: Database["public"]["Enums"]["order_status"]
+          updated_at: string
+        }
+        Insert: {
+          comment?: string
+          created_at?: string
+          current_department?: Database["public"]["Enums"]["department"]
+          deadline?: string | null
+          doors_count?: number
+          entered_current_dept_at?: string
+          filial?: string
+          finished_at?: string | null
+          id?: string
+          number: string
+          pogonaj_required?: boolean
+          pogonaj_status?: string
+          position_deadlines?: Json
+          product_type?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          updated_at?: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          current_department?: Database["public"]["Enums"]["department"]
+          deadline?: string | null
+          doors_count?: number
+          entered_current_dept_at?: string
+          filial?: string
+          finished_at?: string | null
+          id?: string
+          number?: string
+          pogonaj_required?: boolean
+          pogonaj_status?: string
+          position_deadlines?: Json
+          product_type?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
+      role_to_dept: {
+        Args: { _role: Database["public"]["Enums"]["app_role"] }
+        Returns: Database["public"]["Enums"]["department"]
+      }
+      user_in_dept: {
+        Args: {
+          _dept: Database["public"]["Enums"]["department"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "admin"
+        | "ojidaniya"
+        | "stolyarka"
+        | "stolyarka_otk"
+        | "malyarka"
+        | "malyarka_otk"
+        | "kraska"
+        | "kraska_otk"
+        | "upakovka"
+        | "arxiv"
+      department:
+        | "ojidaniya"
+        | "stolyarka"
+        | "stolyarka_otk"
+        | "malyarka"
+        | "malyarka_otk"
+        | "kraska"
+        | "kraska_otk"
+        | "upakovka"
+        | "arxiv"
+      order_status: "pending_accept" | "in_progress" | "delivered"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +322,31 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "admin",
+        "ojidaniya",
+        "stolyarka",
+        "stolyarka_otk",
+        "malyarka",
+        "malyarka_otk",
+        "kraska",
+        "kraska_otk",
+        "upakovka",
+        "arxiv",
+      ],
+      department: [
+        "ojidaniya",
+        "stolyarka",
+        "stolyarka_otk",
+        "malyarka",
+        "malyarka_otk",
+        "kraska",
+        "kraska_otk",
+        "upakovka",
+        "arxiv",
+      ],
+      order_status: ["pending_accept", "in_progress", "delivered"],
+    },
   },
 } as const
