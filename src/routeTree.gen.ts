@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicCronTelegramReportRouteImport } from './routes/api/public/cron/telegram-report'
 
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -33,35 +39,51 @@ const ApiPublicCronTelegramReportRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/stats': typeof StatsRoute
   '/api/public/cron/telegram-report': typeof ApiPublicCronTelegramReportRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/stats': typeof StatsRoute
   '/api/public/cron/telegram-report': typeof ApiPublicCronTelegramReportRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/stats': typeof StatsRoute
   '/api/public/cron/telegram-report': typeof ApiPublicCronTelegramReportRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/api/public/cron/telegram-report'
+  fullPaths: '/' | '/login' | '/stats' | '/api/public/cron/telegram-report'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/api/public/cron/telegram-report'
-  id: '__root__' | '/' | '/login' | '/api/public/cron/telegram-report'
+  to: '/' | '/login' | '/stats' | '/api/public/cron/telegram-report'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/stats'
+    | '/api/public/cron/telegram-report'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
+  StatsRoute: typeof StatsRoute
   ApiPublicCronTelegramReportRoute: typeof ApiPublicCronTelegramReportRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -89,8 +111,19 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
+  StatsRoute: StatsRoute,
   ApiPublicCronTelegramReportRoute: ApiPublicCronTelegramReportRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
