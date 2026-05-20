@@ -93,7 +93,7 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: order, error } = await supabase
       .from("orders")
-      .update({ status: "in_progress" })
+      .update({ status: "in_progress", previous_department: null, entered_current_dept_at: new Date().toISOString() })
       .eq("id", data.orderId)
       .eq("status", "pending_accept")
       .select()
@@ -131,6 +131,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       .from("orders")
       .update({
         current_department: (next ?? cur.current_department) as any,
+        previous_department: isLast ? null : cur.current_department,
         status: isLast ? "delivered" : "pending_accept",
         entered_current_dept_at: new Date().toISOString(),
         finished_at: isLast ? new Date().toISOString() : null,
@@ -148,6 +149,61 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       to_department: (next ?? cur.current_department) as any,
     });
     return { order };
+  });
+
+// ---------- Get order history (with actor names) ----------
+export const getOrderHistoryFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ orderId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("order_history")
+      .select("id, action, from_department, to_department, note, created_at, user_id")
+      .eq("order_id", data.orderId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    const ids = Array.from(new Set((rows ?? []).map((r: any) => r.user_id).filter(Boolean)));
+    let names: Record<string, string> = {};
+    if (ids.length) {
+      const { data: profs } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", ids);
+      names = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]));
+    }
+    return { items: (rows ?? []).map((r: any) => ({ ...r, actor_name: names[r.user_id] || "" })) };
+  });
+
+// ---------- Settings ----------
+export const getSettingsFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { data } = await supabaseAdmin.from("app_settings").select("key, value");
+    const map: Record<string, any> = {};
+    (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
+    return {
+      penalty_per_day: Number(map.penalty_per_day ?? 100000),
+      telegram_hour_utc: Number(map.telegram_hour_utc ?? 4),
+    };
+  });
+
+export const updateSettingsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      penalty_per_day: z.number().int().min(0),
+      telegram_hour_utc: z.number().int().min(0).max(23),
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+    await supabaseAdmin.from("app_settings").upsert([
+      { key: "penalty_per_day", value: data.penalty_per_day as any },
+      { key: "telegram_hour_utc", value: data.telegram_hour_utc as any },
+    ], { onConflict: "key" });
+    const { error } = await supabaseAdmin.rpc("reschedule_telegram_cron", { hour_utc: data.telegram_hour_utc });
+    if (error) throw new Error("Cron yangilab bo'lmadi: " + error.message);
+    return { ok: true };
   });
 
 // ---------- Admin: move to any dept ----------
