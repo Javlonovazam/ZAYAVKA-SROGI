@@ -114,12 +114,37 @@ function DashboardPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Qidirish..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-48 md:w-64" />
             </div>
+            <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>
             {auth.isAdmin && <NewOrderDialog />}
             {auth.isAdmin && <AdminPanel />}
             <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/login" }); }}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+        <div className="px-4 md:px-6 pb-3 flex items-center gap-2 flex-wrap border-t border-border pt-3">
+          <Select value={deptFilter} onValueChange={setDeptFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Bo'lim" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Barcha bo'limlar</SelectItem>
+              {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{DEPT_LABELS[d]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Holat" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Barcha holatlar</SelectItem>
+              <SelectItem value="pending_accept">Qabul kutilmoqda</SelectItem>
+              <SelectItem value="in_progress">Jarayonda</SelectItem>
+              <SelectItem value="delivered">Tugagan</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+          <span className="text-xs text-muted-foreground">—</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+          {(deptFilter !== "all" || statusFilter !== "all" || dateFrom || dateTo) && (
+            <Button size="sm" variant="ghost" onClick={() => { setDeptFilter("all"); setStatusFilter("all"); setDateFrom(""); setDateTo(""); }}>Tozalash</Button>
+          )}
         </div>
         {delayed.length > 0 && (
           <div className="bg-status-pending/10 border-t border-status-pending/30 px-4 md:px-6 py-2 text-sm flex items-center gap-2 text-status-pending">
