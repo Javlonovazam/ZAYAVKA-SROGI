@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       order_history: {
         Row: {
           action: string
@@ -70,6 +88,7 @@ export type Database = {
           pogonaj_required: boolean
           pogonaj_status: string
           position_deadlines: Json
+          previous_department: Database["public"]["Enums"]["department"] | null
           product_type: string
           status: Database["public"]["Enums"]["order_status"]
           updated_at: string
@@ -88,6 +107,7 @@ export type Database = {
           pogonaj_required?: boolean
           pogonaj_status?: string
           position_deadlines?: Json
+          previous_department?: Database["public"]["Enums"]["department"] | null
           product_type?: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
@@ -106,6 +126,7 @@ export type Database = {
           pogonaj_required?: boolean
           pogonaj_status?: string
           position_deadlines?: Json
+          previous_department?: Database["public"]["Enums"]["department"] | null
           product_type?: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
@@ -161,6 +182,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      reschedule_telegram_cron: {
+        Args: { hour_utc: number }
+        Returns: undefined
+      }
       role_to_dept: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: Database["public"]["Enums"]["department"]
