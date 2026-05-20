@@ -37,12 +37,19 @@ export const DEPT_LABELS: Record<Department, string> = {
   arxiv: "Arxiv",
 };
 
+export const DEPT_ICONS: Record<Department, string> = {
+  ojidaniya: "⏳", stolyarka: "🪵", stolyarka_otk: "🔍",
+  malyarka: "🎨", malyarka_otk: "🔍", kraska: "🖌️",
+  kraska_otk: "🔍", upakovka: "📦", arxiv: "🗄️",
+};
+
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
   ...DEPT_LABELS,
 };
 
-export const PENALTY_PER_DAY = 100_000; // so'm
+export const DEFAULT_PENALTY_PER_DAY = 100_000; // so'm (overridden by settings)
+export const PENALTY_PER_DAY = DEFAULT_PENALTY_PER_DAY;
 
 export function nextDepartment(dept: Department): Department | null {
   const i = DEPARTMENTS.indexOf(dept);
