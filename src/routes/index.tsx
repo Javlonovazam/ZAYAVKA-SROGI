@@ -10,8 +10,9 @@ import {
 } from "@/lib/departments";
 import {
   acceptOrderFn, deliverOrderFn, createOrderFn, updateDeadlineFn,
-  moveOrderFn, deleteOrderFn, adminCreateUserFn,
+  moveOrderFn, deleteOrderFn, adminCreateUserFn, updateOrderFn,
 } from "@/lib/orders.functions";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LogOut, Plus, Settings, AlertTriangle, Search } from "lucide-react";
+import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
