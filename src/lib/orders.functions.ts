@@ -124,13 +124,13 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       .single();
     if (e1) throw new Error(e1.message);
 
-    const next = nextDept(cur.current_department);
+    const next = nextDept(cur.current_department) as any;
     const isLast = next === null;
 
     const { data: order, error } = await supabase
       .from("orders")
       .update({
-        current_department: next ?? cur.current_department,
+        current_department: (next ?? cur.current_department) as any,
         status: isLast ? "delivered" : "pending_accept",
         entered_current_dept_at: new Date().toISOString(),
         finished_at: isLast ? new Date().toISOString() : null,
@@ -145,7 +145,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       user_id: userId,
       action: "delivered",
       from_department: cur.current_department,
-      to_department: next ?? cur.current_department,
+      to_department: (next ?? cur.current_department) as any,
     });
     return { order };
   });
