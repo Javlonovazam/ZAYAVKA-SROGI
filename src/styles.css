@@ -37,6 +37,8 @@
   --color-status-done: var(--status-done);
   --color-status-done-fg: var(--status-done-fg);
   --color-status-delayed: var(--status-delayed);
+  --color-status-accepted: var(--status-accepted);
+  --color-status-accepted-fg: var(--status-accepted-fg);
 }
 
 :root {
