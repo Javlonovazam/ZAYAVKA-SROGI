@@ -54,14 +54,19 @@ export const Route = createFileRoute("/api/public/cron/telegram-report")({
           .from("orders").select("*").neq("status", "delivered");
         if (error) return Response.json({ error: error.message }, { status: 500 });
 
+        const PENALTY = await getPenalty();
         const now = new Date();
         const sana = now.toLocaleDateString("uz-UZ");
         const vaqt = now.toLocaleTimeString("uz-UZ");
 
         const delayed = (orders || []).map((o: any) => {
-          const dl = o.position_deadlines?.[o.current_department] || o.deadline;
+          // jarima topshiruvchiga (pending_accept paytida — previous_department srogi)
+          const deptForDl = o.status === "pending_accept" && o.previous_department
+            ? o.previous_department
+            : o.current_department;
+          const dl = o.position_deadlines?.[deptForDl] || o.deadline;
           const dd = delayDays(dl);
-          return { ...o, _delay: dd, _penalty: dd * PENALTY };
+          return { ...o, _delay: dd, _penalty: dd * PENALTY, _blameDept: deptForDl };
         }).filter((o: any) => o._delay > 0);
 
         let text = "🚨 <b>DIQQAT: MUDDATI O'TGAN BUYURTMALAR</b> 🚨\n";
@@ -77,7 +82,7 @@ export const Route = createFileRoute("/api/public/cron/telegram-report")({
 
         let no = 1;
         for (const dept of DEPTS) {
-          const rows = delayed.filter((o: any) => o.current_department === dept);
+          const rows = delayed.filter((o: any) => o._blameDept === dept);
           if (!rows.length) continue;
           const dailyPenalty = rows.length * PENALTY;
           const totalPenalty = rows.reduce((s: number, r: any) => s + r._penalty, 0);
