@@ -224,6 +224,35 @@ export const updateDeadlineFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---------- Admin: update order fields ----------
+export const updateOrderFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        orderId: z.string().uuid(),
+        number: z.string().min(1).optional(),
+        filial: z.string().optional(),
+        doors_count: z.number().int().min(0).optional(),
+        product_type: z.string().optional(),
+        comment: z.string().optional(),
+        pogonaj_required: z.boolean().optional(),
+        pogonaj_status: z.string().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+    const { orderId, ...patch } = data;
+    const { error } = await supabaseAdmin.from("orders").update(patch as any).eq("id", orderId);
+    if (error) throw new Error(error.message);
+    await supabaseAdmin.from("order_history").insert({
+      order_id: orderId, user_id: userId, action: "edited", note: JSON.stringify(patch),
+    });
+    return { ok: true };
+  });
+
 // ---------- Admin: delete order ----------
 export const deleteOrderFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -239,6 +268,47 @@ export const deleteOrderFn = createServerFn({ method: "POST" })
       .eq("id", data.orderId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// ---------- AI analyze ----------
+export const aiAnalyzeFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+
+    const { data: orders } = await supabaseAdmin.from("orders").select("*");
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY yo'q");
+
+    const summary = (orders ?? []).map((o: any) => ({
+      number: o.number,
+      filial: o.filial,
+      dept: o.current_department,
+      status: o.status,
+      doors: o.doors_count,
+      deadline: o.position_deadlines?.[o.current_department] || o.deadline,
+      created_at: o.created_at,
+      finished_at: o.finished_at,
+    }));
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: "Sen ishlab chiqarish tahlilchisisan. Faqat o'zbek tilida, qisqa va aniq, markdown bullet ko'rinishda javob ber." },
+          { role: "user", content: `Quyidagi zayavkalar ma'lumotini tahlil qil. Bottleneck bo'limlarni, kechikishlar trendini, eng ko'p muammoli filialni aniqla va aniq tavsiyalar ber.\n\n${JSON.stringify(summary).slice(0, 12000)}` },
+        ],
+      }),
+    });
+    if (res.status === 429) throw new Error("AI: limit oshib ketdi, biroz kuting");
+    if (res.status === 402) throw new Error("AI: kreditlar tugagan");
+    if (!res.ok) throw new Error(`AI xato: ${res.status}`);
+    const json = await res.json();
+    const text = json.choices?.[0]?.message?.content || "Tahlil bo'sh";
+    return { text };
   });
 
 // ---------- Admin: create user with role ----------

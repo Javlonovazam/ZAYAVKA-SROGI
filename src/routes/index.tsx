@@ -10,8 +10,9 @@ import {
 } from "@/lib/departments";
 import {
   acceptOrderFn, deliverOrderFn, createOrderFn, updateDeadlineFn,
-  moveOrderFn, deleteOrderFn, adminCreateUserFn,
+  moveOrderFn, deleteOrderFn, adminCreateUserFn, updateOrderFn,
 } from "@/lib/orders.functions";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LogOut, Plus, Settings, AlertTriangle, Search } from "lucide-react";
+import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
@@ -44,6 +45,10 @@ function DashboardPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
 
   useEffect(() => {
     if (!auth.loading && !auth.user) navigate({ to: "/login" });
@@ -75,9 +80,15 @@ function DashboardPage() {
   }, [auth.user, qc]);
 
   const filtered = orders.filter((o) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return o.number.toLowerCase().includes(s) || o.filial.toLowerCase().includes(s);
+    if (search) {
+      const s = search.toLowerCase();
+      if (!o.number.toLowerCase().includes(s) && !o.filial.toLowerCase().includes(s)) return false;
+    }
+    if (deptFilter !== "all" && o.current_department !== deptFilter) return false;
+    if (statusFilter !== "all" && o.status !== statusFilter) return false;
+    if (dateFrom && new Date(o.entered_current_dept_at) < new Date(dateFrom)) return false;
+    if (dateTo && new Date(o.entered_current_dept_at) > new Date(dateTo + "T23:59:59")) return false;
+    return true;
   });
 
   // Stats
@@ -103,12 +114,37 @@ function DashboardPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Qidirish..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-48 md:w-64" />
             </div>
+            <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>
             {auth.isAdmin && <NewOrderDialog />}
             {auth.isAdmin && <AdminPanel />}
             <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/login" }); }}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+        <div className="px-4 md:px-6 pb-3 flex items-center gap-2 flex-wrap border-t border-border pt-3">
+          <Select value={deptFilter} onValueChange={setDeptFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Bo'lim" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Barcha bo'limlar</SelectItem>
+              {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{DEPT_LABELS[d]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Holat" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Barcha holatlar</SelectItem>
+              <SelectItem value="pending_accept">Qabul kutilmoqda</SelectItem>
+              <SelectItem value="in_progress">Jarayonda</SelectItem>
+              <SelectItem value="delivered">Tugagan</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+          <span className="text-xs text-muted-foreground">—</span>
+          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+          {(deptFilter !== "all" || statusFilter !== "all" || dateFrom || dateTo) && (
+            <Button size="sm" variant="ghost" onClick={() => { setDeptFilter("all"); setStatusFilter("all"); setDateFrom(""); setDateTo(""); }}>Tozalash</Button>
+          )}
         </div>
         {delayed.length > 0 && (
           <div className="bg-status-pending/10 border-t border-status-pending/30 px-4 md:px-6 py-2 text-sm flex items-center gap-2 text-status-pending">
@@ -238,15 +274,44 @@ function AdminOrderActions({ order, onDone }: { order: Order; onDone: () => void
   const updateDl = useServerFn(updateDeadlineFn);
   const move = useServerFn(moveOrderFn);
   const del = useServerFn(deleteOrderFn);
+  const updateOrder = useServerFn(updateOrderFn);
   const qc = useQueryClient();
   const positionDeadline = order.position_deadlines?.[order.current_department] || "";
   const [newDl, setNewDl] = useState(positionDeadline ? new Date(positionDeadline).toISOString().slice(0, 16) : "");
   const [moveTo, setMoveTo] = useState<Department>(order.current_department);
+  const [edit, setEdit] = useState({
+    number: order.number,
+    filial: order.filial,
+    doors_count: order.doors_count,
+    product_type: order.product_type,
+    comment: order.comment,
+    pogonaj_required: order.pogonaj_required,
+    pogonaj_status: order.pogonaj_status,
+  });
 
   return (
     <div className="border-t border-border pt-4 mt-2 space-y-3">
-      <div className="text-xs font-semibold text-muted-foreground">ADMIN</div>
-      <div className="flex gap-2 items-end">
+      <div className="text-xs font-semibold text-muted-foreground">ADMIN — TAHRIRLASH</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label className="text-xs">Raqami</Label><Input value={edit.number} onChange={(e) => setEdit({ ...edit, number: e.target.value })} /></div>
+        <div><Label className="text-xs">Filial</Label><Input value={edit.filial} onChange={(e) => setEdit({ ...edit, filial: e.target.value })} /></div>
+        <div><Label className="text-xs">Eshik soni</Label><Input type="number" value={edit.doors_count} onChange={(e) => setEdit({ ...edit, doors_count: +e.target.value })} /></div>
+        <div><Label className="text-xs">Mahsulot</Label><Input value={edit.product_type} onChange={(e) => setEdit({ ...edit, product_type: e.target.value })} /></div>
+      </div>
+      <div><Label className="text-xs">Izoh</Label><Textarea rows={2} value={edit.comment} onChange={(e) => setEdit({ ...edit, comment: e.target.value })} /></div>
+      <div className="flex gap-3 items-center">
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={edit.pogonaj_required} onChange={(e) => setEdit({ ...edit, pogonaj_required: e.target.checked })} />
+          Pogonaj kerak
+        </label>
+        <Input placeholder="Pogonaj holati" className="flex-1" value={edit.pogonaj_status} onChange={(e) => setEdit({ ...edit, pogonaj_status: e.target.value })} />
+      </div>
+      <Button size="sm" className="w-full" onClick={async () => {
+        try { await updateOrder({ data: { orderId: order.id, ...edit } }); toast.success("Saqlandi"); qc.invalidateQueries({ queryKey: ["orders"] }); }
+        catch (e: any) { toast.error(e.message); }
+      }}>Ma'lumotni saqlash</Button>
+
+      <div className="flex gap-2 items-end pt-2 border-t border-border">
         <div className="flex-1">
           <Label className="text-xs">Joriy bo'lim srogi</Label>
           <Input type="datetime-local" value={newDl} onChange={(e) => setNewDl(e.target.value)} />
