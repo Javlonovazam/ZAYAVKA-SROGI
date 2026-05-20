@@ -80,9 +80,15 @@ function DashboardPage() {
   }, [auth.user, qc]);
 
   const filtered = orders.filter((o) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return o.number.toLowerCase().includes(s) || o.filial.toLowerCase().includes(s);
+    if (search) {
+      const s = search.toLowerCase();
+      if (!o.number.toLowerCase().includes(s) && !o.filial.toLowerCase().includes(s)) return false;
+    }
+    if (deptFilter !== "all" && o.current_department !== deptFilter) return false;
+    if (statusFilter !== "all" && o.status !== statusFilter) return false;
+    if (dateFrom && new Date(o.entered_current_dept_at) < new Date(dateFrom)) return false;
+    if (dateTo && new Date(o.entered_current_dept_at) > new Date(dateTo + "T23:59:59")) return false;
+    return true;
   });
 
   // Stats
