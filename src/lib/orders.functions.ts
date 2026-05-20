@@ -211,7 +211,7 @@ export const updateDeadlineFn = createServerFn({ method: "POST" })
 
     const { error } = await supabaseAdmin
       .from("orders")
-      .update(patch)
+      .update(patch as any)
       .eq("id", data.orderId);
     if (error) throw new Error(error.message);
 
