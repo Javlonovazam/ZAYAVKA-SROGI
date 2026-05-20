@@ -291,8 +291,27 @@ function AdminOrderActions({ order, onDone }: { order: Order; onDone: () => void
 
   return (
     <div className="border-t border-border pt-4 mt-2 space-y-3">
-      <div className="text-xs font-semibold text-muted-foreground">ADMIN</div>
-      <div className="flex gap-2 items-end">
+      <div className="text-xs font-semibold text-muted-foreground">ADMIN — TAHRIRLASH</div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label className="text-xs">Raqami</Label><Input value={edit.number} onChange={(e) => setEdit({ ...edit, number: e.target.value })} /></div>
+        <div><Label className="text-xs">Filial</Label><Input value={edit.filial} onChange={(e) => setEdit({ ...edit, filial: e.target.value })} /></div>
+        <div><Label className="text-xs">Eshik soni</Label><Input type="number" value={edit.doors_count} onChange={(e) => setEdit({ ...edit, doors_count: +e.target.value })} /></div>
+        <div><Label className="text-xs">Mahsulot</Label><Input value={edit.product_type} onChange={(e) => setEdit({ ...edit, product_type: e.target.value })} /></div>
+      </div>
+      <div><Label className="text-xs">Izoh</Label><Textarea rows={2} value={edit.comment} onChange={(e) => setEdit({ ...edit, comment: e.target.value })} /></div>
+      <div className="flex gap-3 items-center">
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={edit.pogonaj_required} onChange={(e) => setEdit({ ...edit, pogonaj_required: e.target.checked })} />
+          Pogonaj kerak
+        </label>
+        <Input placeholder="Pogonaj holati" className="flex-1" value={edit.pogonaj_status} onChange={(e) => setEdit({ ...edit, pogonaj_status: e.target.value })} />
+      </div>
+      <Button size="sm" className="w-full" onClick={async () => {
+        try { await updateOrder({ data: { orderId: order.id, ...edit } }); toast.success("Saqlandi"); qc.invalidateQueries({ queryKey: ["orders"] }); }
+        catch (e: any) { toast.error(e.message); }
+      }}>Ma'lumotni saqlash</Button>
+
+      <div className="flex gap-2 items-end pt-2 border-t border-border">
         <div className="flex-1">
           <Label className="text-xs">Joriy bo'lim srogi</Label>
           <Input type="datetime-local" value={newDl} onChange={(e) => setNewDl(e.target.value)} />
