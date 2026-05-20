@@ -16,7 +16,10 @@ const DEPT_ICONS: Record<string, string> = {
   malyarka_otk: "🔍", kraska: "🖌️", kraska_otk: "🔍", upakovka: "📦", arxiv: "🗄️",
 };
 
-const PENALTY = 100_000;
+async function getPenalty(): Promise<number> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "penalty_per_day").maybeSingle();
+  return Number(data?.value ?? 100000);
+}
 
 function fmtMoney(n: number) {
   return new Intl.NumberFormat("uz-UZ").format(n) + " so'm";
