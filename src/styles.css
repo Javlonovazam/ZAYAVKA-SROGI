@@ -80,7 +80,21 @@
   --status-done: oklch(0.62 0.16 150);         /* yashil */
   --status-done-fg: oklch(0.99 0 0);
   --status-delayed: oklch(0.5 0.24 25);
+  --status-accepted: oklch(0.72 0.18 55);       /* orange — qabul qilindi */
+  --status-accepted-fg: oklch(0.2 0.05 60);
 }
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.62 0.22 25 / 0.55); transform: translateY(0); }
+  50%      { box-shadow: 0 0 0 10px oklch(0.62 0.22 25 / 0);   transform: translateY(-1px); }
+}
+.animate-pulse-red { animation: pulse-red 1.6s ease-in-out infinite; }
+
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up-fade 0.25s ease-out both; }
 
 .dark {
   --background: oklch(0.16 0.02 250);
