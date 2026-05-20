@@ -274,10 +274,20 @@ function AdminOrderActions({ order, onDone }: { order: Order; onDone: () => void
   const updateDl = useServerFn(updateDeadlineFn);
   const move = useServerFn(moveOrderFn);
   const del = useServerFn(deleteOrderFn);
+  const updateOrder = useServerFn(updateOrderFn);
   const qc = useQueryClient();
   const positionDeadline = order.position_deadlines?.[order.current_department] || "";
   const [newDl, setNewDl] = useState(positionDeadline ? new Date(positionDeadline).toISOString().slice(0, 16) : "");
   const [moveTo, setMoveTo] = useState<Department>(order.current_department);
+  const [edit, setEdit] = useState({
+    number: order.number,
+    filial: order.filial,
+    doors_count: order.doors_count,
+    product_type: order.product_type,
+    comment: order.comment,
+    pogonaj_required: order.pogonaj_required,
+    pogonaj_status: order.pogonaj_status,
+  });
 
   return (
     <div className="border-t border-border pt-4 mt-2 space-y-3">
