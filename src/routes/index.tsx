@@ -49,13 +49,23 @@ function useSettings() {
       const { data } = await supabase.from("app_settings").select("key, value");
       const map: Record<string, any> = {};
       (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
+      const asArr = (v: any): string[] => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
       return {
         penalty_per_day: Number(map.penalty_per_day ?? 100000),
         telegram_hour_utc: Number(map.telegram_hour_utc ?? 4),
+        filials: asArr(map.filials),
+        product_types: asArr(map.product_types),
       };
     },
   });
 }
+
+async function saveCatalog(key: "filials" | "product_types", value: string[]) {
+  const { error } = await supabase.from("app_settings").upsert({ key, value: value as any }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+
 
 function DashboardPage() {
   const auth = useAuth();
@@ -136,7 +146,7 @@ function DashboardPage() {
   if (!auth.user) return null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_oklch(0.97_0.04_265)_0%,_oklch(0.985_0.005_240)_45%,_oklch(0.95_0.03_180)_100%)]">
       <header className="border-b border-border bg-card sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="px-4 md:px-6 py-3 flex items-center gap-3 flex-wrap">
           <h1 className="text-lg md:text-xl font-bold tracking-tight">🏭 Ishlab chiqarish CRM</h1>
@@ -373,29 +383,9 @@ function OrderDetailDialog({ order, open, onOpenChange, auth, penalty, canActOnD
           </TabsContent>
 
           <TabsContent value="deadlines" className="pt-3">
-            <div className="space-y-2">
-              {DEPARTMENTS.map((d) => {
-                const ddl = order.position_deadlines?.[d];
-                const days = calcDelayDays(ddl);
-                return (
-                  <div key={d} className={`flex items-center justify-between p-3 rounded-lg border ${order.current_department === d ? "bg-primary/5 border-primary/40" : "bg-card border-border"}`}>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span>{DEPT_ICONS[d]}</span>
-                      <span className="font-medium">{DEPT_LABELS[d]}</span>
-                    </div>
-                    <div className="text-xs text-right">
-                      {ddl ? (
-                        <>
-                          <div>{new Date(ddl).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
-                          {days > 0 && <div className="text-status-pending">⏳ {days} kun</div>}
-                        </>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DeadlinesEditor order={order} canEdit={auth.isAdmin} />
           </TabsContent>
+
 
           <TabsContent value="history" className="pt-3">
             <div className="relative pl-6 space-y-3">
@@ -425,6 +415,60 @@ function OrderDetailDialog({ order, open, onOpenChange, auth, penalty, canActOnD
     </Dialog>
   );
 }
+function DeadlinesEditor({ order, canEdit }: { order: Order; canEdit: boolean }) {
+  const updateDl = useServerFn(updateDeadlineFn);
+  const qc = useQueryClient();
+  const toLocal = (iso?: string) => iso ? new Date(iso).toISOString().slice(0, 16) : "";
+  const [vals, setVals] = useState<Record<string, string>>(() => {
+    const o: Record<string, string> = {};
+    DEPARTMENTS.forEach((d) => { o[d] = toLocal(order.position_deadlines?.[d]); });
+    return o;
+  });
+  const [saving, setSaving] = useState(false);
+  const dirty = DEPARTMENTS.some((d) => (vals[d] || "") !== toLocal(order.position_deadlines?.[d]));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const pd: Record<string, string> = {};
+      DEPARTMENTS.forEach((d) => { if (vals[d]) pd[d] = new Date(vals[d]).toISOString(); });
+      await updateDl({ data: { orderId: order.id, position_deadlines: pd } });
+      toast.success("📅 Sroklar saqlandi");
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    } catch (e: any) { toast.error(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      {DEPARTMENTS.map((d) => {
+        const days = calcDelayDays(order.position_deadlines?.[d]);
+        return (
+          <div key={d} className={`flex items-center justify-between gap-2 p-3 rounded-xl border transition-all ${order.current_department === d ? "bg-primary/5 border-primary/40 shadow-sm" : "bg-card border-border"}`}>
+            <div className="flex items-center gap-2 text-sm min-w-[140px]">
+              <span className="text-base">{DEPT_ICONS[d]}</span>
+              <span className="font-medium">{DEPT_LABELS[d]}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-1 justify-end">
+              {canEdit ? (
+                <Input type="datetime-local" className="h-8 max-w-[200px]" value={vals[d]} onChange={(e) => setVals({ ...vals, [d]: e.target.value })} />
+              ) : vals[d] ? (
+                <span className="text-xs">{new Date(vals[d]).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              ) : <span className="text-xs text-muted-foreground">—</span>}
+              {days > 0 && <span className="text-xs text-status-pending whitespace-nowrap">⏳ {days} k</span>}
+            </div>
+          </div>
+        );
+      })}
+      {canEdit && (
+        <Button className="w-full" disabled={!dirty || saving} onClick={save}>
+          💾 Sroklarni saqlash
+        </Button>
+      )}
+    </div>
+  );
+}
+
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
@@ -512,9 +556,24 @@ function AdminOrderActions({ order, onDone }: { order: Order; onDone: () => void
 function NewOrderDialog() {
   const create = useServerFn(createOrderFn);
   const qc = useQueryClient();
+  const settings = useSettings();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ number: "", filial: "", doors_count: 0, product_type: "", comment: "", pogonaj_required: false });
   const [posDl, setPosDl] = useState<Record<string, string>>({});
+  const [dupCheck, setDupCheck] = useState<"idle" | "checking" | "duplicate" | "ok">("idle");
+
+  useEffect(() => {
+    if (!f.number.trim()) { setDupCheck("idle"); return; }
+    setDupCheck("checking");
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from("orders").select("id").eq("number", f.number.trim()).limit(1);
+      setDupCheck((data && data.length > 0) ? "duplicate" : "ok");
+    }, 350);
+    return () => clearTimeout(t);
+  }, [f.number]);
+
+  const filials = settings.data?.filials ?? [];
+  const productTypes = settings.data?.product_types ?? [];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -522,16 +581,51 @@ function NewOrderDialog() {
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>➕ Yangi zayavka</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Raqami</Label><Input value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} /></div>
-          <div><Label>Filial</Label><Input value={f.filial} onChange={(e) => setF({ ...f, filial: e.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><Label>Eshik soni</Label><Input type="number" value={f.doors_count} onChange={(e) => setF({ ...f, doors_count: +e.target.value })} /></div>
-            <div><Label>Mahsulot turi</Label><Input value={f.product_type} onChange={(e) => setF({ ...f, product_type: e.target.value })} /></div>
+          <div>
+            <Label>Raqami</Label>
+            <Input value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} className={dupCheck === "duplicate" ? "border-status-pending" : ""} />
+            {dupCheck === "duplicate" && (
+              <div className="text-xs text-status-pending mt-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Bu raqam oldin yozilgan!
+              </div>
+            )}
+            {dupCheck === "ok" && f.number && (
+              <div className="text-xs text-status-done mt-1">✅ Bo'sh raqam</div>
+            )}
           </div>
-          <div><Label>Izoh</Label><Textarea value={f.comment} onChange={(e) => setF({ ...f, comment: e.target.value })} /></div>
+          <div>
+            <Label>🏢 Filial</Label>
+            {filials.length > 0 ? (
+              <Select value={f.filial} onValueChange={(v) => setF({ ...f, filial: v })}>
+                <SelectTrigger><SelectValue placeholder="Filial tanlang..." /></SelectTrigger>
+                <SelectContent>
+                  {filials.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-xs text-muted-foreground p-2 bg-muted rounded">Filial yo'q. Sozlamalar → Filiallar dan qo'shing</div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>🚪 Eshik soni</Label><Input type="number" value={f.doors_count} onChange={(e) => setF({ ...f, doors_count: +e.target.value })} /></div>
+            <div>
+              <Label>🪵 Mahsulot turi</Label>
+              {productTypes.length > 0 ? (
+                <Select value={f.product_type} onValueChange={(v) => setF({ ...f, product_type: v })}>
+                  <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
+                  <SelectContent>
+                    {productTypes.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-xs text-muted-foreground p-2 bg-muted rounded">Sozlamalardan qo'shing</div>
+              )}
+            </div>
+          </div>
+          <div><Label>📝 Izoh</Label><Textarea value={f.comment} onChange={(e) => setF({ ...f, comment: e.target.value })} /></div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={f.pogonaj_required} onChange={(e) => setF({ ...f, pogonaj_required: e.target.checked })} />
-            Pogonaj kerak
+            📏 Pogonaj kerak
           </label>
           <div className="border-t border-border pt-3">
             <div className="text-sm font-semibold mb-2">📅 Pozitsiya sroklari (ixtiyoriy)</div>
@@ -546,16 +640,17 @@ function NewOrderDialog() {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={async () => {
+          <Button disabled={dupCheck === "duplicate" || dupCheck === "checking" || !f.number.trim()} onClick={async () => {
             try {
               const pd: Record<string, string> = {};
               Object.entries(posDl).forEach(([k, v]) => { if (v) pd[k] = new Date(v).toISOString(); });
               await create({ data: { ...f, position_deadlines: pd } });
-              toast.success("Yaratildi");
+              toast.success("✅ Yaratildi");
               qc.invalidateQueries({ queryKey: ["orders"] });
               setOpen(false);
               setF({ number: "", filial: "", doors_count: 0, product_type: "", comment: "", pogonaj_required: false });
               setPosDl({});
+              setDupCheck("idle");
             } catch (e: any) { toast.error(e.message); }
           }}>Yaratish</Button>
         </DialogFooter>
@@ -563,6 +658,7 @@ function NewOrderDialog() {
     </Dialog>
   );
 }
+
 
 function AdminPanel() {
   const createUser = useServerFn(adminCreateUserFn);
@@ -625,37 +721,89 @@ function SettingsDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm" variant="outline"><Cog className="h-4 w-4 mr-1" />Sozlamalar</Button></DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>⚙️ Tizim sozlamalari</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>💰 Kunlik jarima miqdori (so'm)</Label>
-            <Input type="number" value={penalty} onChange={(e) => setPenalty(+e.target.value)} />
-            <div className="text-xs text-muted-foreground mt-1">Har bir kechikkan kun uchun</div>
-          </div>
-          <div>
-            <Label>📱 Telegram xabar vaqti (Toshkent vaqti)</Label>
-            <Input type="time" step="3600" value={tashkentHour} onChange={(e) => {
-              setTashkentHour(e.target.value);
-              const h = parseInt(e.target.value.split(":")[0] || "9", 10);
-              setHour((h - 5 + 24) % 24);
-            }} />
-            <div className="text-xs text-muted-foreground mt-1">
-              UTC: {String(hour).padStart(2, "0")}:00 • Har kuni shu vaqtda Telegram'ga jarima hisoboti yuboriladi
+        <Tabs defaultValue="general">
+          <TabsList className="grid grid-cols-3 w-full">
+            <TabsTrigger value="general">⚙️ Umumiy</TabsTrigger>
+            <TabsTrigger value="filials">🏢 Filiallar</TabsTrigger>
+            <TabsTrigger value="products">🪵 Mahsulotlar</TabsTrigger>
+          </TabsList>
+          <TabsContent value="general" className="space-y-4 pt-4">
+            <div>
+              <Label>💰 Kunlik jarima miqdori (so'm)</Label>
+              <Input type="number" value={penalty} onChange={(e) => setPenalty(+e.target.value)} />
+              <div className="text-xs text-muted-foreground mt-1">Har bir kechikkan kun uchun</div>
             </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={async () => {
-            try {
-              await update({ data: { penalty_per_day: penalty, telegram_hour_utc: hour } });
-              toast.success("Sozlamalar saqlandi va cron yangilandi");
-              qc.invalidateQueries({ queryKey: ["app_settings"] });
-              setOpen(false);
-            } catch (e: any) { toast.error(e.message); }
-          }}>💾 Saqlash</Button>
-        </DialogFooter>
+            <div>
+              <Label>📱 Telegram xabar vaqti (Toshkent vaqti)</Label>
+              <Input type="time" step="3600" value={tashkentHour} onChange={(e) => {
+                setTashkentHour(e.target.value);
+                const h = parseInt(e.target.value.split(":")[0] || "9", 10);
+                setHour((h - 5 + 24) % 24);
+              }} />
+              <div className="text-xs text-muted-foreground mt-1">
+                UTC: {String(hour).padStart(2, "0")}:00 • Har kuni shu vaqtda Telegram'ga hisobot yuboriladi
+              </div>
+            </div>
+            <Button className="w-full" onClick={async () => {
+              try {
+                await update({ data: { penalty_per_day: penalty, telegram_hour_utc: hour } });
+                toast.success("Sozlamalar saqlandi va cron yangilandi");
+                qc.invalidateQueries({ queryKey: ["app_settings"] });
+              } catch (e: any) { toast.error(e.message); }
+            }}>💾 Saqlash</Button>
+          </TabsContent>
+          <TabsContent value="filials" className="pt-4">
+            <CatalogEditor catalogKey="filials" title="Filial" icon="🏢" />
+          </TabsContent>
+          <TabsContent value="products" className="pt-4">
+            <CatalogEditor catalogKey="product_types" title="Mahsulot turi" icon="🪵" />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
 }
+
+function CatalogEditor({ catalogKey, title, icon }: { catalogKey: "filials" | "product_types"; title: string; icon: string }) {
+  const settings = useSettings();
+  const qc = useQueryClient();
+  const list = settings.data?.[catalogKey] ?? [];
+  const [newItem, setNewItem] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const add = async () => {
+    const v = newItem.trim();
+    if (!v) return;
+    if (list.includes(v)) { toast.error("Bu allaqachon bor"); return; }
+    setSaving(true);
+    try { await saveCatalog(catalogKey, [...list, v]); setNewItem(""); qc.invalidateQueries({ queryKey: ["app_settings"] }); }
+    catch (e: any) { toast.error(e.message); }
+    setSaving(false);
+  };
+  const remove = async (v: string) => {
+    if (!confirm(`"${v}" o'chirilsinmi?`)) return;
+    try { await saveCatalog(catalogKey, list.filter((x) => x !== v)); qc.invalidateQueries({ queryKey: ["app_settings"] }); }
+    catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Input placeholder={`Yangi ${title.toLowerCase()}...`} value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <Button onClick={add} disabled={saving || !newItem.trim()}><Plus className="h-4 w-4 mr-1" />Qo'shish</Button>
+      </div>
+      <div className="space-y-1 max-h-72 overflow-y-auto">
+        {list.length === 0 && <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">Bo'sh — birinchisini qo'shing</div>}
+        {list.map((x) => (
+          <div key={x} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-card border border-border hover:border-primary/40 transition-all">
+            <span className="text-sm">{icon} {x}</span>
+            <Button size="sm" variant="ghost" className="h-7 text-status-pending hover:bg-status-pending/10" onClick={() => remove(x)}>🗑️</Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
