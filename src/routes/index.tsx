@@ -145,7 +145,7 @@ function DashboardPage() {
   if (!auth.user) return null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_oklch(0.97_0.04_265)_0%,_oklch(0.985_0.005_240)_45%,_oklch(0.95_0.03_180)_100%)]">
       <header className="border-b border-border bg-card sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="px-4 md:px-6 py-3 flex items-center gap-3 flex-wrap">
           <h1 className="text-lg md:text-xl font-bold tracking-tight">🏭 Ishlab chiqarish CRM</h1>
