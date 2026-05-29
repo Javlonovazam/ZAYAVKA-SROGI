@@ -414,6 +414,60 @@ function OrderDetailDialog({ order, open, onOpenChange, auth, penalty, canActOnD
     </Dialog>
   );
 }
+function DeadlinesEditor({ order, canEdit }: { order: Order; canEdit: boolean }) {
+  const updateDl = useServerFn(updateDeadlineFn);
+  const qc = useQueryClient();
+  const toLocal = (iso?: string) => iso ? new Date(iso).toISOString().slice(0, 16) : "";
+  const [vals, setVals] = useState<Record<string, string>>(() => {
+    const o: Record<string, string> = {};
+    DEPARTMENTS.forEach((d) => { o[d] = toLocal(order.position_deadlines?.[d]); });
+    return o;
+  });
+  const [saving, setSaving] = useState(false);
+  const dirty = DEPARTMENTS.some((d) => (vals[d] || "") !== toLocal(order.position_deadlines?.[d]));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const pd: Record<string, string> = {};
+      DEPARTMENTS.forEach((d) => { if (vals[d]) pd[d] = new Date(vals[d]).toISOString(); });
+      await updateDl({ data: { orderId: order.id, position_deadlines: pd } });
+      toast.success("📅 Sroklar saqlandi");
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    } catch (e: any) { toast.error(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      {DEPARTMENTS.map((d) => {
+        const days = calcDelayDays(order.position_deadlines?.[d]);
+        return (
+          <div key={d} className={`flex items-center justify-between gap-2 p-3 rounded-xl border transition-all ${order.current_department === d ? "bg-primary/5 border-primary/40 shadow-sm" : "bg-card border-border"}`}>
+            <div className="flex items-center gap-2 text-sm min-w-[140px]">
+              <span className="text-base">{DEPT_ICONS[d]}</span>
+              <span className="font-medium">{DEPT_LABELS[d]}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-1 justify-end">
+              {canEdit ? (
+                <Input type="datetime-local" className="h-8 max-w-[200px]" value={vals[d]} onChange={(e) => setVals({ ...vals, [d]: e.target.value })} />
+              ) : vals[d] ? (
+                <span className="text-xs">{new Date(vals[d]).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              ) : <span className="text-xs text-muted-foreground">—</span>}
+              {days > 0 && <span className="text-xs text-status-pending whitespace-nowrap">⏳ {days} k</span>}
+            </div>
+          </div>
+        );
+      })}
+      {canEdit && (
+        <Button className="w-full" disabled={!dirty || saving} onClick={save}>
+          💾 Sroklarni saqlash
+        </Button>
+      )}
+    </div>
+  );
+}
+
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
