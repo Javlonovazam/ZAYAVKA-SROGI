@@ -49,13 +49,22 @@ function useSettings() {
       const { data } = await supabase.from("app_settings").select("key, value");
       const map: Record<string, any> = {};
       (data ?? []).forEach((r: any) => { map[r.key] = r.value; });
+      const asArr = (v: any): string[] => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
       return {
         penalty_per_day: Number(map.penalty_per_day ?? 100000),
         telegram_hour_utc: Number(map.telegram_hour_utc ?? 4),
+        filials: asArr(map.filials),
+        product_types: asArr(map.product_types),
       };
     },
   });
 }
+
+async function saveCatalog(key: "filials" | "product_types", value: string[]) {
+  const { error } = await supabase.from("app_settings").upsert({ key, value: value as any });
+  if (error) throw error;
+}
+
 
 function DashboardPage() {
   const auth = useAuth();
