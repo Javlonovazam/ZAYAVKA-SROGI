@@ -382,29 +382,9 @@ function OrderDetailDialog({ order, open, onOpenChange, auth, penalty, canActOnD
           </TabsContent>
 
           <TabsContent value="deadlines" className="pt-3">
-            <div className="space-y-2">
-              {DEPARTMENTS.map((d) => {
-                const ddl = order.position_deadlines?.[d];
-                const days = calcDelayDays(ddl);
-                return (
-                  <div key={d} className={`flex items-center justify-between p-3 rounded-lg border ${order.current_department === d ? "bg-primary/5 border-primary/40" : "bg-card border-border"}`}>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span>{DEPT_ICONS[d]}</span>
-                      <span className="font-medium">{DEPT_LABELS[d]}</span>
-                    </div>
-                    <div className="text-xs text-right">
-                      {ddl ? (
-                        <>
-                          <div>{new Date(ddl).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
-                          {days > 0 && <div className="text-status-pending">⏳ {days} kun</div>}
-                        </>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DeadlinesEditor order={order} canEdit={auth.isAdmin} />
           </TabsContent>
+
 
           <TabsContent value="history" className="pt-3">
             <div className="relative pl-6 space-y-3">
