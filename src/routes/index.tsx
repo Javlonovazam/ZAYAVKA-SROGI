@@ -555,9 +555,24 @@ function AdminOrderActions({ order, onDone }: { order: Order; onDone: () => void
 function NewOrderDialog() {
   const create = useServerFn(createOrderFn);
   const qc = useQueryClient();
+  const settings = useSettings();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ number: "", filial: "", doors_count: 0, product_type: "", comment: "", pogonaj_required: false });
   const [posDl, setPosDl] = useState<Record<string, string>>({});
+  const [dupCheck, setDupCheck] = useState<"idle" | "checking" | "duplicate" | "ok">("idle");
+
+  useEffect(() => {
+    if (!f.number.trim()) { setDupCheck("idle"); return; }
+    setDupCheck("checking");
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from("orders").select("id").eq("number", f.number.trim()).limit(1);
+      setDupCheck((data && data.length > 0) ? "duplicate" : "ok");
+    }, 350);
+    return () => clearTimeout(t);
+  }, [f.number]);
+
+  const filials = settings.data?.filials ?? [];
+  const productTypes = settings.data?.product_types ?? [];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -565,16 +580,51 @@ function NewOrderDialog() {
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>➕ Yangi zayavka</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Raqami</Label><Input value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} /></div>
-          <div><Label>Filial</Label><Input value={f.filial} onChange={(e) => setF({ ...f, filial: e.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><Label>Eshik soni</Label><Input type="number" value={f.doors_count} onChange={(e) => setF({ ...f, doors_count: +e.target.value })} /></div>
-            <div><Label>Mahsulot turi</Label><Input value={f.product_type} onChange={(e) => setF({ ...f, product_type: e.target.value })} /></div>
+          <div>
+            <Label>Raqami</Label>
+            <Input value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} className={dupCheck === "duplicate" ? "border-status-pending" : ""} />
+            {dupCheck === "duplicate" && (
+              <div className="text-xs text-status-pending mt-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> Bu raqam oldin yozilgan!
+              </div>
+            )}
+            {dupCheck === "ok" && f.number && (
+              <div className="text-xs text-status-done mt-1">✅ Bo'sh raqam</div>
+            )}
           </div>
-          <div><Label>Izoh</Label><Textarea value={f.comment} onChange={(e) => setF({ ...f, comment: e.target.value })} /></div>
+          <div>
+            <Label>🏢 Filial</Label>
+            {filials.length > 0 ? (
+              <Select value={f.filial} onValueChange={(v) => setF({ ...f, filial: v })}>
+                <SelectTrigger><SelectValue placeholder="Filial tanlang..." /></SelectTrigger>
+                <SelectContent>
+                  {filials.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-xs text-muted-foreground p-2 bg-muted rounded">Filial yo'q. Sozlamalar → Filiallar dan qo'shing</div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>🚪 Eshik soni</Label><Input type="number" value={f.doors_count} onChange={(e) => setF({ ...f, doors_count: +e.target.value })} /></div>
+            <div>
+              <Label>🪵 Mahsulot turi</Label>
+              {productTypes.length > 0 ? (
+                <Select value={f.product_type} onValueChange={(v) => setF({ ...f, product_type: v })}>
+                  <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
+                  <SelectContent>
+                    {productTypes.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-xs text-muted-foreground p-2 bg-muted rounded">Sozlamalardan qo'shing</div>
+              )}
+            </div>
+          </div>
+          <div><Label>📝 Izoh</Label><Textarea value={f.comment} onChange={(e) => setF({ ...f, comment: e.target.value })} /></div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={f.pogonaj_required} onChange={(e) => setF({ ...f, pogonaj_required: e.target.checked })} />
-            Pogonaj kerak
+            📏 Pogonaj kerak
           </label>
           <div className="border-t border-border pt-3">
             <div className="text-sm font-semibold mb-2">📅 Pozitsiya sroklari (ixtiyoriy)</div>
@@ -589,16 +639,17 @@ function NewOrderDialog() {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={async () => {
+          <Button disabled={dupCheck === "duplicate" || dupCheck === "checking" || !f.number.trim()} onClick={async () => {
             try {
               const pd: Record<string, string> = {};
               Object.entries(posDl).forEach(([k, v]) => { if (v) pd[k] = new Date(v).toISOString(); });
               await create({ data: { ...f, position_deadlines: pd } });
-              toast.success("Yaratildi");
+              toast.success("✅ Yaratildi");
               qc.invalidateQueries({ queryKey: ["orders"] });
               setOpen(false);
               setF({ number: "", filial: "", doors_count: 0, product_type: "", comment: "", pogonaj_required: false });
               setPosDl({});
+              setDupCheck("idle");
             } catch (e: any) { toast.error(e.message); }
           }}>Yaratish</Button>
         </DialogFooter>
@@ -606,6 +657,7 @@ function NewOrderDialog() {
     </Dialog>
   );
 }
+
 
 function AdminPanel() {
   const createUser = useServerFn(adminCreateUserFn);
