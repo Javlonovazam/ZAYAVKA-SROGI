@@ -720,37 +720,89 @@ function SettingsDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm" variant="outline"><Cog className="h-4 w-4 mr-1" />Sozlamalar</Button></DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>⚙️ Tizim sozlamalari</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>💰 Kunlik jarima miqdori (so'm)</Label>
-            <Input type="number" value={penalty} onChange={(e) => setPenalty(+e.target.value)} />
-            <div className="text-xs text-muted-foreground mt-1">Har bir kechikkan kun uchun</div>
-          </div>
-          <div>
-            <Label>📱 Telegram xabar vaqti (Toshkent vaqti)</Label>
-            <Input type="time" step="3600" value={tashkentHour} onChange={(e) => {
-              setTashkentHour(e.target.value);
-              const h = parseInt(e.target.value.split(":")[0] || "9", 10);
-              setHour((h - 5 + 24) % 24);
-            }} />
-            <div className="text-xs text-muted-foreground mt-1">
-              UTC: {String(hour).padStart(2, "0")}:00 • Har kuni shu vaqtda Telegram'ga jarima hisoboti yuboriladi
+        <Tabs defaultValue="general">
+          <TabsList className="grid grid-cols-3 w-full">
+            <TabsTrigger value="general">⚙️ Umumiy</TabsTrigger>
+            <TabsTrigger value="filials">🏢 Filiallar</TabsTrigger>
+            <TabsTrigger value="products">🪵 Mahsulotlar</TabsTrigger>
+          </TabsList>
+          <TabsContent value="general" className="space-y-4 pt-4">
+            <div>
+              <Label>💰 Kunlik jarima miqdori (so'm)</Label>
+              <Input type="number" value={penalty} onChange={(e) => setPenalty(+e.target.value)} />
+              <div className="text-xs text-muted-foreground mt-1">Har bir kechikkan kun uchun</div>
             </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={async () => {
-            try {
-              await update({ data: { penalty_per_day: penalty, telegram_hour_utc: hour } });
-              toast.success("Sozlamalar saqlandi va cron yangilandi");
-              qc.invalidateQueries({ queryKey: ["app_settings"] });
-              setOpen(false);
-            } catch (e: any) { toast.error(e.message); }
-          }}>💾 Saqlash</Button>
-        </DialogFooter>
+            <div>
+              <Label>📱 Telegram xabar vaqti (Toshkent vaqti)</Label>
+              <Input type="time" step="3600" value={tashkentHour} onChange={(e) => {
+                setTashkentHour(e.target.value);
+                const h = parseInt(e.target.value.split(":")[0] || "9", 10);
+                setHour((h - 5 + 24) % 24);
+              }} />
+              <div className="text-xs text-muted-foreground mt-1">
+                UTC: {String(hour).padStart(2, "0")}:00 • Har kuni shu vaqtda Telegram'ga hisobot yuboriladi
+              </div>
+            </div>
+            <Button className="w-full" onClick={async () => {
+              try {
+                await update({ data: { penalty_per_day: penalty, telegram_hour_utc: hour } });
+                toast.success("Sozlamalar saqlandi va cron yangilandi");
+                qc.invalidateQueries({ queryKey: ["app_settings"] });
+              } catch (e: any) { toast.error(e.message); }
+            }}>💾 Saqlash</Button>
+          </TabsContent>
+          <TabsContent value="filials" className="pt-4">
+            <CatalogEditor catalogKey="filials" title="Filial" icon="🏢" />
+          </TabsContent>
+          <TabsContent value="products" className="pt-4">
+            <CatalogEditor catalogKey="product_types" title="Mahsulot turi" icon="🪵" />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
 }
+
+function CatalogEditor({ catalogKey, title, icon }: { catalogKey: "filials" | "product_types"; title: string; icon: string }) {
+  const settings = useSettings();
+  const qc = useQueryClient();
+  const list = settings.data?.[catalogKey] ?? [];
+  const [newItem, setNewItem] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const add = async () => {
+    const v = newItem.trim();
+    if (!v) return;
+    if (list.includes(v)) { toast.error("Bu allaqachon bor"); return; }
+    setSaving(true);
+    try { await saveCatalog(catalogKey, [...list, v]); setNewItem(""); qc.invalidateQueries({ queryKey: ["app_settings"] }); }
+    catch (e: any) { toast.error(e.message); }
+    setSaving(false);
+  };
+  const remove = async (v: string) => {
+    if (!confirm(`"${v}" o'chirilsinmi?`)) return;
+    try { await saveCatalog(catalogKey, list.filter((x) => x !== v)); qc.invalidateQueries({ queryKey: ["app_settings"] }); }
+    catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Input placeholder={`Yangi ${title.toLowerCase()}...`} value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <Button onClick={add} disabled={saving || !newItem.trim()}><Plus className="h-4 w-4 mr-1" />Qo'shish</Button>
+      </div>
+      <div className="space-y-1 max-h-72 overflow-y-auto">
+        {list.length === 0 && <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">Bo'sh — birinchisini qo'shing</div>}
+        {list.map((x) => (
+          <div key={x} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-card border border-border hover:border-primary/40 transition-all">
+            <span className="text-sm">{icon} {x}</span>
+            <Button size="sm" variant="ghost" className="h-7 text-status-pending hover:bg-status-pending/10" onClick={() => remove(x)}>🗑️</Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
