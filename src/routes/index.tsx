@@ -61,9 +61,10 @@ function useSettings() {
 }
 
 async function saveCatalog(key: "filials" | "product_types", value: string[]) {
-  const { error } = await supabase.from("app_settings").upsert({ key, value: value as any });
+  const { error } = await supabase.from("app_settings").upsert({ key, value: value as any }, { onConflict: "key" });
   if (error) throw error;
 }
+
 
 
 function DashboardPage() {
