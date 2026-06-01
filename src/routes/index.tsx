@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -25,10 +25,6 @@ import { toast } from "sonner";
 import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/login" });
-  },
   component: DashboardPage,
 });
 
@@ -155,7 +151,7 @@ function DashboardPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Qidirish..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-48 md:w-64" />
             </div>
-            <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>
+            {auth.isAdmin && <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>}
             {auth.isAdmin && <NewOrderDialog />}
             {auth.isAdmin && <AdminPanel />}
             {auth.isAdmin && <SettingsDialog />}
@@ -196,25 +192,25 @@ function DashboardPage() {
         )}
       </header>
 
-      <main className="overflow-x-auto p-4 md:p-6">
-        <div className="flex gap-4 min-w-max">
-          {DEPARTMENTS.map((dept) => {
+      <main className="overflow-x-auto p-3 md:p-4">
+        <div className="flex gap-3 min-w-max">
+          {DEPARTMENTS.filter((dept) => auth.isAdmin || auth.roles.includes(dept as any)).map((dept) => {
             const cards = cardsForDept(dept);
             return (
-              <div key={dept} className="w-80 flex-shrink-0">
-                <div className="bg-gradient-to-br from-secondary to-secondary/60 rounded-xl p-3 mb-3 flex items-center justify-between shadow-sm">
-                  <h2 className="font-semibold text-sm flex items-center gap-2">
-                    <span className="text-base">{DEPT_ICONS[dept]}</span>
+              <div key={dept} className="w-64 flex-shrink-0">
+                <div className="bg-gradient-to-br from-secondary to-secondary/60 rounded-lg px-2.5 py-2 mb-2 flex items-center justify-between shadow-sm sticky top-0">
+                  <h2 className="font-semibold text-xs flex items-center gap-1.5">
+                    <span className="text-sm">{DEPT_ICONS[dept]}</span>
                     {DEPT_LABELS[dept]}
                   </h2>
-                  <Badge variant="outline" className="bg-card">{cards.length}</Badge>
+                  <Badge variant="outline" className="bg-card text-[10px] h-5 px-1.5">{cards.length}</Badge>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {cards.map((o) => (
                     <OrderCard key={o.id + dept} order={o} columnDept={dept} auth={auth} penalty={PENALTY} blameDept={blameDept(o)} />
                   ))}
                   {cards.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center py-8 border-2 border-dashed border-border rounded-lg">
+                    <div className="text-[11px] text-muted-foreground text-center py-6 border-2 border-dashed border-border rounded-lg">
                       Bo'sh
                     </div>
                   )}
@@ -259,36 +255,29 @@ function OrderCard({ order, columnDept, auth, penalty, blameDept }: {
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`w-full text-left rounded-xl border-2 ${bg} ${extra} p-3 hover:shadow-lg transition-all animate-slide-up`}
+        className={`w-full text-left rounded-lg border ${bg} ${extra} p-2 hover:shadow-md transition-all animate-slide-up`}
       >
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="font-mono font-bold text-sm">#{order.number}</div>
-          {isGhost && <Badge className="bg-status-done text-status-done-fg gap-1">✅ Topshirildi</Badge>}
-          {!isGhost && order.status === "pending_accept" && <Badge className="bg-status-pending text-status-pending-fg gap-1">🔴 Qabul kuting</Badge>}
-          {!isGhost && order.status === "in_progress" && <Badge className="bg-status-accepted text-status-accepted-fg gap-1">🟠 Jarayonda</Badge>}
-          {!isGhost && order.status === "delivered" && <Badge className="bg-status-done text-status-done-fg gap-1">🟢 Tugadi</Badge>}
+        <div className="flex items-center justify-between gap-1.5 mb-1">
+          <div className="font-mono font-bold text-xs truncate">#{order.number}</div>
+          {isGhost && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-done/30 text-status-done font-semibold whitespace-nowrap">✅</span>}
+          {!isGhost && order.status === "pending_accept" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-pending/30 text-status-pending font-semibold whitespace-nowrap">🔴 Kuting</span>}
+          {!isGhost && order.status === "in_progress" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-accepted/30 text-status-accepted font-semibold whitespace-nowrap">🟠</span>}
+          {!isGhost && order.status === "delivered" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-done/30 text-status-done font-semibold whitespace-nowrap">🟢</span>}
         </div>
-        <div className="text-sm font-medium">🏢 {order.filial}</div>
-        <div className="text-xs text-muted-foreground mt-1">
+        <div className="text-xs font-medium truncate">🏢 {order.filial}</div>
+        <div className="text-[11px] text-muted-foreground truncate">
           🚪 {order.doors_count} • {order.product_type}
         </div>
-        {isGhost && (
-          <div className="text-xs mt-2 text-status-done font-medium">
-            ➡️ {DEPT_LABELS[order.current_department]} qabul qilishini kuting
-          </div>
-        )}
         {positionDeadline && (
-          <div className="text-xs mt-2 flex items-center gap-1"><Clock className="h-3 w-3" />
+          <div className="text-[10px] mt-1 flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-2.5 w-2.5" />
             {new Date(positionDeadline).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         {isDelayed && (
-          <div className="mt-2 text-xs text-status-pending font-semibold">
-            ⏳ {delayDays} kun kechikdi • 💰 {formatMoney(penaltyAmount)}
+          <div className="mt-1 text-[10px] text-status-pending font-semibold">
+            ⏳ {delayDays}k • 💰 {formatMoney(penaltyAmount)}
           </div>
-        )}
-        {order.pogonaj_required && (
-          <Badge variant="outline" className="mt-2 text-xs">📏 Pogonaj: {order.pogonaj_status || "kerak"}</Badge>
         )}
       </button>
 
@@ -663,7 +652,7 @@ function NewOrderDialog() {
 function AdminPanel() {
   const createUser = useServerFn(adminCreateUserFn);
   const [open, setOpen] = useState(false);
-  const [u, setU] = useState({ email: "", password: "", full_name: "", role: "ojidaniya" });
+  const [u, setU] = useState({ username: "", password: "", full_name: "", role: "ojidaniya" });
   const roles = ["admin", ...DEPARTMENTS];
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -671,26 +660,36 @@ function AdminPanel() {
       <DialogContent>
         <DialogHeader><DialogTitle>👥 Yangi foydalanuvchi</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Ism</Label><Input value={u.full_name} onChange={(e) => setU({ ...u, full_name: e.target.value })} /></div>
-          <div><Label>Email</Label><Input type="email" value={u.email} onChange={(e) => setU({ ...u, email: e.target.value })} /></div>
-          <div><Label>Parol</Label><Input type="password" value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} /></div>
+          <div><Label>👤 Ism (ko'rsatiladigan)</Label><Input value={u.full_name} onChange={(e) => setU({ ...u, full_name: e.target.value })} /></div>
           <div>
-            <Label>Rol</Label>
+            <Label>🆔 Login (username)</Label>
+            <Input value={u.username} onChange={(e) => setU({ ...u, username: e.target.value.replace(/\s+/g, "").toLowerCase() })} placeholder="stolyarka1" />
+            <div className="text-[11px] text-muted-foreground mt-1">Faqat lotin harflari/raqamlar, probelsiz</div>
+          </div>
+          <div><Label>🔒 Parol</Label><Input type="text" value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} placeholder="Kamida 6 belgi" /></div>
+          <div>
+            <Label>🎭 Rol / Bo'lim</Label>
             <Select value={u.role} onValueChange={(v) => setU({ ...u, role: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                {roles.map((r) => <SelectItem key={r} value={r}>{r === "admin" ? "👑 Admin" : `${(DEPT_ICONS as any)[r] ?? ""} ${(DEPT_LABELS as any)[r] ?? r}`}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
         <DialogFooter>
           <Button onClick={async () => {
+            if (!u.username || u.password.length < 6) { toast.error("Login va parol (min 6) kerak"); return; }
             try {
-              await createUser({ data: u as any });
-              toast.success("Foydalanuvchi yaratildi");
+              await createUser({ data: {
+                email: `${u.username}@crm.local`,
+                password: u.password,
+                full_name: u.full_name || u.username,
+                role: u.role,
+              } as any });
+              toast.success("✅ Foydalanuvchi yaratildi");
               setOpen(false);
-              setU({ email: "", password: "", full_name: "", role: "ojidaniya" });
+              setU({ username: "", password: "", full_name: "", role: "ojidaniya" });
             } catch (e: any) { toast.error(e.message); }
           }}>Yaratish</Button>
         </DialogFooter>

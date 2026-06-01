@@ -1,5 +1,5 @@
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,10 +18,6 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/stats")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/login" });
-  },
   component: StatsPage,
 });
 
@@ -39,10 +35,15 @@ function periodStart(p: Period): Date | null {
 
 function StatsPage() {
   const auth = useAuth();
+  const navigate = useNavigate();
   const analyze = useServerFn(aiAnalyzeFn);
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
+
+  useEffect(() => {
+    if (!auth.loading && (!auth.user || !auth.isAdmin)) navigate({ to: "/" });
+  }, [auth.loading, auth.user, auth.isAdmin, navigate]);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings"],
