@@ -192,25 +192,25 @@ function DashboardPage() {
         )}
       </header>
 
-      <main className="overflow-x-auto p-4 md:p-6">
-        <div className="flex gap-4 min-w-max">
-          {DEPARTMENTS.map((dept) => {
+      <main className="overflow-x-auto p-3 md:p-4">
+        <div className="flex gap-3 min-w-max">
+          {DEPARTMENTS.filter((dept) => auth.isAdmin || auth.roles.includes(dept as any)).map((dept) => {
             const cards = cardsForDept(dept);
             return (
-              <div key={dept} className="w-80 flex-shrink-0">
-                <div className="bg-gradient-to-br from-secondary to-secondary/60 rounded-xl p-3 mb-3 flex items-center justify-between shadow-sm">
-                  <h2 className="font-semibold text-sm flex items-center gap-2">
-                    <span className="text-base">{DEPT_ICONS[dept]}</span>
+              <div key={dept} className="w-64 flex-shrink-0">
+                <div className="bg-gradient-to-br from-secondary to-secondary/60 rounded-lg px-2.5 py-2 mb-2 flex items-center justify-between shadow-sm sticky top-0">
+                  <h2 className="font-semibold text-xs flex items-center gap-1.5">
+                    <span className="text-sm">{DEPT_ICONS[dept]}</span>
                     {DEPT_LABELS[dept]}
                   </h2>
-                  <Badge variant="outline" className="bg-card">{cards.length}</Badge>
+                  <Badge variant="outline" className="bg-card text-[10px] h-5 px-1.5">{cards.length}</Badge>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {cards.map((o) => (
                     <OrderCard key={o.id + dept} order={o} columnDept={dept} auth={auth} penalty={PENALTY} blameDept={blameDept(o)} />
                   ))}
                   {cards.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center py-8 border-2 border-dashed border-border rounded-lg">
+                    <div className="text-[11px] text-muted-foreground text-center py-6 border-2 border-dashed border-border rounded-lg">
                       Bo'sh
                     </div>
                   )}
