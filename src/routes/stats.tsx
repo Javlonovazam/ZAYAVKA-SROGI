@@ -35,10 +35,15 @@ function periodStart(p: Period): Date | null {
 
 function StatsPage() {
   const auth = useAuth();
+  const navigate = useNavigate();
   const analyze = useServerFn(aiAnalyzeFn);
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
+
+  useEffect(() => {
+    if (!auth.loading && (!auth.user || !auth.isAdmin)) navigate({ to: "/" });
+  }, [auth.loading, auth.user, auth.isAdmin, navigate]);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings"],
