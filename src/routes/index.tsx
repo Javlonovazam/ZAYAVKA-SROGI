@@ -255,36 +255,29 @@ function OrderCard({ order, columnDept, auth, penalty, blameDept }: {
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`w-full text-left rounded-xl border-2 ${bg} ${extra} p-3 hover:shadow-lg transition-all animate-slide-up`}
+        className={`w-full text-left rounded-lg border ${bg} ${extra} p-2 hover:shadow-md transition-all animate-slide-up`}
       >
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="font-mono font-bold text-sm">#{order.number}</div>
-          {isGhost && <Badge className="bg-status-done text-status-done-fg gap-1">✅ Topshirildi</Badge>}
-          {!isGhost && order.status === "pending_accept" && <Badge className="bg-status-pending text-status-pending-fg gap-1">🔴 Qabul kuting</Badge>}
-          {!isGhost && order.status === "in_progress" && <Badge className="bg-status-accepted text-status-accepted-fg gap-1">🟠 Jarayonda</Badge>}
-          {!isGhost && order.status === "delivered" && <Badge className="bg-status-done text-status-done-fg gap-1">🟢 Tugadi</Badge>}
+        <div className="flex items-center justify-between gap-1.5 mb-1">
+          <div className="font-mono font-bold text-xs truncate">#{order.number}</div>
+          {isGhost && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-done/30 text-status-done font-semibold whitespace-nowrap">✅</span>}
+          {!isGhost && order.status === "pending_accept" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-pending/30 text-status-pending font-semibold whitespace-nowrap">🔴 Kuting</span>}
+          {!isGhost && order.status === "in_progress" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-accepted/30 text-status-accepted font-semibold whitespace-nowrap">🟠</span>}
+          {!isGhost && order.status === "delivered" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-status-done/30 text-status-done font-semibold whitespace-nowrap">🟢</span>}
         </div>
-        <div className="text-sm font-medium">🏢 {order.filial}</div>
-        <div className="text-xs text-muted-foreground mt-1">
+        <div className="text-xs font-medium truncate">🏢 {order.filial}</div>
+        <div className="text-[11px] text-muted-foreground truncate">
           🚪 {order.doors_count} • {order.product_type}
         </div>
-        {isGhost && (
-          <div className="text-xs mt-2 text-status-done font-medium">
-            ➡️ {DEPT_LABELS[order.current_department]} qabul qilishini kuting
-          </div>
-        )}
         {positionDeadline && (
-          <div className="text-xs mt-2 flex items-center gap-1"><Clock className="h-3 w-3" />
+          <div className="text-[10px] mt-1 flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-2.5 w-2.5" />
             {new Date(positionDeadline).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         {isDelayed && (
-          <div className="mt-2 text-xs text-status-pending font-semibold">
-            ⏳ {delayDays} kun kechikdi • 💰 {formatMoney(penaltyAmount)}
+          <div className="mt-1 text-[10px] text-status-pending font-semibold">
+            ⏳ {delayDays}k • 💰 {formatMoney(penaltyAmount)}
           </div>
-        )}
-        {order.pogonaj_required && (
-          <Badge variant="outline" className="mt-2 text-xs">📏 Pogonaj: {order.pogonaj_status || "kerak"}</Badge>
         )}
       </button>
 
