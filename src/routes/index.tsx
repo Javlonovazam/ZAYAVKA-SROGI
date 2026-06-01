@@ -652,7 +652,7 @@ function NewOrderDialog() {
 function AdminPanel() {
   const createUser = useServerFn(adminCreateUserFn);
   const [open, setOpen] = useState(false);
-  const [u, setU] = useState({ email: "", password: "", full_name: "", role: "ojidaniya" });
+  const [u, setU] = useState({ username: "", password: "", full_name: "", role: "ojidaniya" });
   const roles = ["admin", ...DEPARTMENTS];
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -660,26 +660,36 @@ function AdminPanel() {
       <DialogContent>
         <DialogHeader><DialogTitle>👥 Yangi foydalanuvchi</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>Ism</Label><Input value={u.full_name} onChange={(e) => setU({ ...u, full_name: e.target.value })} /></div>
-          <div><Label>Email</Label><Input type="email" value={u.email} onChange={(e) => setU({ ...u, email: e.target.value })} /></div>
-          <div><Label>Parol</Label><Input type="password" value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} /></div>
+          <div><Label>👤 Ism (ko'rsatiladigan)</Label><Input value={u.full_name} onChange={(e) => setU({ ...u, full_name: e.target.value })} /></div>
           <div>
-            <Label>Rol</Label>
+            <Label>🆔 Login (username)</Label>
+            <Input value={u.username} onChange={(e) => setU({ ...u, username: e.target.value.replace(/\s+/g, "").toLowerCase() })} placeholder="stolyarka1" />
+            <div className="text-[11px] text-muted-foreground mt-1">Faqat lotin harflari/raqamlar, probelsiz</div>
+          </div>
+          <div><Label>🔒 Parol</Label><Input type="text" value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} placeholder="Kamida 6 belgi" /></div>
+          <div>
+            <Label>🎭 Rol / Bo'lim</Label>
             <Select value={u.role} onValueChange={(v) => setU({ ...u, role: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                {roles.map((r) => <SelectItem key={r} value={r}>{r === "admin" ? "👑 Admin" : `${(DEPT_ICONS as any)[r] ?? ""} ${(DEPT_LABELS as any)[r] ?? r}`}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
         <DialogFooter>
           <Button onClick={async () => {
+            if (!u.username || u.password.length < 6) { toast.error("Login va parol (min 6) kerak"); return; }
             try {
-              await createUser({ data: u as any });
-              toast.success("Foydalanuvchi yaratildi");
+              await createUser({ data: {
+                email: `${u.username}@crm.local`,
+                password: u.password,
+                full_name: u.full_name || u.username,
+                role: u.role,
+              } as any });
+              toast.success("✅ Foydalanuvchi yaratildi");
               setOpen(false);
-              setU({ email: "", password: "", full_name: "", role: "ojidaniya" });
+              setU({ username: "", password: "", full_name: "", role: "ojidaniya" });
             } catch (e: any) { toast.error(e.message); }
           }}>Yaratish</Button>
         </DialogFooter>
