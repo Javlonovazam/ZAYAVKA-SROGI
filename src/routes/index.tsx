@@ -25,10 +25,6 @@ import { toast } from "sonner";
 import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/login" });
-  },
   component: DashboardPage,
 });
 
