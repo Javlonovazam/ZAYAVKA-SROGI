@@ -165,25 +165,40 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
-          login_dept: string | null
-          login_password_plain: string | null
           system_role: string
         }
         Insert: {
           created_at?: string
           full_name?: string
           id: string
-          login_dept?: string | null
-          login_password_plain?: string | null
           system_role?: string
         }
         Update: {
           created_at?: string
           full_name?: string
           id?: string
-          login_dept?: string | null
-          login_password_plain?: string | null
           system_role?: string
+        }
+        Relationships: []
+      }
+      user_credentials: {
+        Row: {
+          login_dept: string
+          password_plain: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          login_dept: string
+          password_plain: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          login_dept?: string
+          password_plain?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
