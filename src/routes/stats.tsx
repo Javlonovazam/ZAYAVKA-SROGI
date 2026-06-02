@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { DEPARTMENTS, DEPT_LABELS, DEPT_ICONS, calcDelayDays, formatMoney, type Department } from "@/lib/departments";
+import { useDepartments, deptLabel, calcDelayDays, formatMoney } from "@/lib/departments";
 import { aiAnalyzeFn } from "@/lib/orders.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +37,8 @@ function StatsPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const analyze = useServerFn(aiAnalyzeFn);
+  const deps = useDepartments();
+  const deptList = deps.data ?? [];
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
@@ -60,7 +62,7 @@ function StatsPage() {
     queryKey: ["orders"],
     queryFn: async () => {
       const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
-      return data || [];
+      return (data || []) as any[];
     },
     enabled: !!auth.user,
   });
@@ -71,8 +73,7 @@ function StatsPage() {
       const { data } = await supabase
         .from("order_history")
         .select("id, order_id, action, from_department, to_department, created_at, user_id")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false }).limit(500);
       const userIds = Array.from(new Set((data ?? []).map((r: any) => r.user_id).filter(Boolean)));
       let names: Record<string, string> = {};
       if (userIds.length) {
@@ -91,24 +92,18 @@ function StatsPage() {
   });
 
   const since = periodStart(period);
-  const orders = useMemo(
-    () => allOrders.filter((o: any) => !since || new Date(o.created_at) >= since),
-    [allOrders, since],
-  );
-  const filteredHistory = useMemo(
-    () => history.filter((h: any) => !since || new Date(h.created_at) >= since),
-    [history, since],
-  );
+  const orders = useMemo(() => allOrders.filter((o: any) => !since || new Date(o.created_at) >= since), [allOrders, since]);
+  const filteredHistory = useMemo(() => history.filter((h: any) => !since || new Date(h.created_at) >= since), [history, since]);
 
   if (auth.loading) return <div className="min-h-screen flex items-center justify-center">Yuklanmoqda...</div>;
 
-  const byDept = DEPARTMENTS.map((d) => {
-    const all = orders.filter((o: any) => o.current_department === d);
+  const byDept = deptList.map((d) => {
+    const all = orders.filter((o: any) => o.current_department === d.key);
     const delayed = all.filter((o: any) => {
-      const dl = o.position_deadlines?.[d] || o.deadline;
+      const dl = o.position_deadlines?.[d.key] || o.deadline;
       return o.status !== "delivered" && calcDelayDays(dl) > 0;
     });
-    return { name: DEPT_LABELS[d as Department], jami: all.length, kechikkan: delayed.length };
+    return { name: d.label, jami: all.length, kechikkan: delayed.length };
   });
 
   const statusCounts = [
@@ -134,18 +129,18 @@ function StatsPage() {
     return { day: d.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit" }), Yangi: created, Tugagan: finished };
   });
 
-  const penaltyByDept = DEPARTMENTS.map((d) => {
+  const penaltyByDept = deptList.map((d) => {
     const sum = orders
       .filter((o: any) => {
         const blame = (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
-        return blame === d && o.status !== "delivered";
+        return blame === d.key && o.status !== "delivered";
       })
       .reduce((acc: number, o: any) => {
         const blame = (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
         const dl = o.position_deadlines?.[blame] || o.deadline;
         return acc + calcDelayDays(dl) * PENALTY;
       }, 0);
-    return { name: DEPT_LABELS[d as Department], jarima: sum };
+    return { name: d.label, jarima: sum };
   });
 
   const totalDelayed = orders.filter((o: any) => {
@@ -153,7 +148,7 @@ function StatsPage() {
     const dl = o.position_deadlines?.[blame] || o.deadline;
     return o.status !== "delivered" && calcDelayDays(dl) > 0;
   }).length;
-  const totalPenalty = penaltyByDept.reduce((s, x) => s + x.jarima, 0);
+  const totalPenalty = penaltyByDept.reduce((s: number, x: { jarima: number }) => s + x.jarima, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -203,7 +198,7 @@ function StatsPage() {
         <Tabs defaultValue="charts">
           <TabsList>
             <TabsTrigger value="charts">📈 Grafiklar</TabsTrigger>
-            <TabsTrigger value="history">🕘 Tarix (oxirgi {filteredHistory.length})</TabsTrigger>
+            <TabsTrigger value="history">🕘 Tarix ({filteredHistory.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="charts" className="pt-4">
@@ -277,10 +272,10 @@ function StatsPage() {
                     </div>
                     <div className="font-mono text-xs w-20 shrink-0">#{h.order_number}</div>
                     <div className="flex-1">
-                      {h.action === "created" && <>🆕 Yaratildi → <b>{DEPT_LABELS[h.to_department as Department] ?? h.to_department}</b></>}
-                      {h.action === "accepted" && <>✅ Qabul qildi <b>{DEPT_LABELS[h.to_department as Department] ?? h.to_department}</b></>}
-                      {h.action === "delivered" && <>📦 <b>{DEPT_LABELS[h.from_department as Department] ?? h.from_department}</b> → <b>{DEPT_LABELS[h.to_department as Department] ?? h.to_department}</b></>}
-                      {h.action === "moved" && <>🔀 Admin: <b>{DEPT_LABELS[h.from_department as Department] ?? "—"}</b> → <b>{DEPT_LABELS[h.to_department as Department] ?? h.to_department}</b></>}
+                      {h.action === "created" && <>🆕 Yaratildi → <b>{deptLabel(deptList, h.to_department)}</b></>}
+                      {h.action === "accepted" && <>✅ Qabul qildi <b>{deptLabel(deptList, h.to_department)}</b></>}
+                      {h.action === "delivered" && <>📦 <b>{deptLabel(deptList, h.from_department)}</b> → <b>{deptLabel(deptList, h.to_department)}</b></>}
+                      {h.action === "moved" && <>🔀 Admin: <b>{deptLabel(deptList, h.from_department)}</b> → <b>{deptLabel(deptList, h.to_department)}</b></>}
                       {h.action === "deadline_changed" && <>📅 Srok o'zgartirildi</>}
                       {h.action === "edited" && <>✏️ Tahrirlandi</>}
                     </div>
