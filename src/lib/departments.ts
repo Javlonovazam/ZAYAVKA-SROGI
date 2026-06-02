@@ -1,65 +1,57 @@
-export type Department =
-  | "ojidaniya"
-  | "stolyarka"
-  | "stolyarka_otk"
-  | "malyarka"
-  | "malyarka_otk"
-  | "kraska"
-  | "kraska_otk"
-  | "upakovka"
-  | "arxiv";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | Department;
+export type DeptRow = {
+  key: string;
+  label: string;
+  icon: string;
+  sort_order: number;
+  active: boolean;
+};
 
 export type OrderStatus = "pending_accept" | "in_progress" | "delivered";
 
-export const DEPARTMENTS: Department[] = [
-  "ojidaniya",
-  "stolyarka",
-  "stolyarka_otk",
-  "malyarka",
-  "malyarka_otk",
-  "kraska",
-  "kraska_otk",
-  "upakovka",
-  "arxiv",
-];
-
-export const DEPT_LABELS: Record<Department, string> = {
-  ojidaniya: "Ojidaniya",
-  stolyarka: "Stolyarka",
-  stolyarka_otk: "Stolyarka OTK",
-  malyarka: "Malyarka",
-  malyarka_otk: "Malyarka OTK",
-  kraska: "Kraska",
-  kraska_otk: "Kraska OTK",
-  upakovka: "Upakovka",
-  arxiv: "Arxiv",
-};
-
-export const DEPT_ICONS: Record<Department, string> = {
-  ojidaniya: "⏳", stolyarka: "🪵", stolyarka_otk: "🔍",
-  malyarka: "🎨", malyarka_otk: "🔍", kraska: "🖌️",
-  kraska_otk: "🔍", upakovka: "📦", arxiv: "🗄️",
-};
-
-export const ROLE_LABELS: Record<AppRole, string> = {
-  admin: "Admin",
-  ...DEPT_LABELS,
-};
-
-export const DEFAULT_PENALTY_PER_DAY = 100_000; // so'm (overridden by settings)
-export const PENALTY_PER_DAY = DEFAULT_PENALTY_PER_DAY;
-
-export function nextDepartment(dept: Department): Department | null {
-  const i = DEPARTMENTS.indexOf(dept);
-  if (i < 0 || i >= DEPARTMENTS.length - 1) return null;
-  return DEPARTMENTS[i + 1];
+export function useDepartments() {
+  return useQuery({
+    queryKey: ["departments"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("key, label, icon, sort_order, active")
+        .eq("active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as DeptRow[];
+    },
+    staleTime: 60_000,
+  });
 }
 
-export function statusColor(status: OrderStatus, isDelayed: boolean) {
-  if (isDelayed) return "delayed";
-  return status;
+export function findDept(depts: DeptRow[], key?: string | null): DeptRow | undefined {
+  if (!key) return undefined;
+  return depts.find((d) => d.key === key);
+}
+
+export function deptLabel(depts: DeptRow[], key?: string | null): string {
+  const d = findDept(depts, key);
+  return d ? d.label : (key ?? "");
+}
+
+export function deptIcon(depts: DeptRow[], key?: string | null): string {
+  const d = findDept(depts, key);
+  return d?.icon ?? "📋";
+}
+
+export function deptFull(depts: DeptRow[], key?: string | null): string {
+  const d = findDept(depts, key);
+  return d ? `${d.icon} ${d.label}` : (key ?? "");
+}
+
+export function nextDepartmentKey(depts: DeptRow[], current: string): string | null {
+  const sorted = [...depts].sort((a, b) => a.sort_order - b.sort_order);
+  const i = sorted.findIndex((d) => d.key === current);
+  if (i < 0 || i >= sorted.length - 1) return null;
+  return sorted[i + 1].key;
 }
 
 export function calcDelayDays(deadline: string | null | undefined): number {

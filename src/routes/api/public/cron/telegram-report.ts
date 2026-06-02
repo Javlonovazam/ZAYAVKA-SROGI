@@ -1,24 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const DEPTS = [
-  "ojidaniya","stolyarka","stolyarka_otk","malyarka","malyarka_otk",
-  "kraska","kraska_otk","upakovka","arxiv",
-] as const;
-
-const DEPT_LABELS: Record<string, string> = {
-  ojidaniya: "Ojidaniya", stolyarka: "Stolyarka", stolyarka_otk: "Stolyarka OTK",
-  malyarka: "Malyarka", malyarka_otk: "Malyarka OTK", kraska: "Kraska",
-  kraska_otk: "Kraska OTK", upakovka: "Upakovka", arxiv: "Arxiv",
-};
-const DEPT_ICONS: Record<string, string> = {
-  ojidaniya: "⏳", stolyarka: "🪵", stolyarka_otk: "🔍", malyarka: "🎨",
-  malyarka_otk: "🔍", kraska: "🖌️", kraska_otk: "🔍", upakovka: "📦", arxiv: "🗄️",
-};
-
 async function getPenalty(): Promise<number> {
   const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "penalty_per_day").maybeSingle();
-  return Number(data?.value ?? 100000);
+  return Number((data as any)?.value ?? 100000);
+}
+
+async function getDepts(): Promise<{ key: string; label: string; icon: string; sort_order: number }[]> {
+  const { data } = await supabaseAdmin
+    .from("departments").select("key, label, icon, sort_order")
+    .eq("active", true).order("sort_order");
+  return (data ?? []) as any[];
 }
 
 function fmtMoney(n: number) {
@@ -55,15 +47,17 @@ export const Route = createFileRoute("/api/public/cron/telegram-report")({
         if (error) return Response.json({ error: error.message }, { status: 500 });
 
         const PENALTY = await getPenalty();
+        const depts = await getDepts();
+        const labelOf = (k: string) => depts.find((d) => d.key === k)?.label ?? k;
+        const iconOf = (k: string) => depts.find((d) => d.key === k)?.icon ?? "📋";
+
         const now = new Date();
         const sana = now.toLocaleDateString("uz-UZ");
         const vaqt = now.toLocaleTimeString("uz-UZ");
 
         const delayed = (orders || []).map((o: any) => {
-          // jarima topshiruvchiga (pending_accept paytida — previous_department srogi)
           const deptForDl = o.status === "pending_accept" && o.previous_department
-            ? o.previous_department
-            : o.current_department;
+            ? o.previous_department : o.current_department;
           const dl = o.position_deadlines?.[deptForDl] || o.deadline;
           const dd = delayDays(dl);
           return { ...o, _delay: dd, _penalty: dd * PENALTY, _blameDept: deptForDl };
@@ -81,13 +75,13 @@ export const Route = createFileRoute("/api/public/cron/telegram-report")({
         }
 
         let no = 1;
-        for (const dept of DEPTS) {
-          const rows = delayed.filter((o: any) => o._blameDept === dept);
+        for (const dept of depts) {
+          const rows = delayed.filter((o: any) => o._blameDept === dept.key);
           if (!rows.length) continue;
           const dailyPenalty = rows.length * PENALTY;
           const totalPenalty = rows.reduce((s: number, r: any) => s + r._penalty, 0);
 
-          text += `${DEPT_ICONS[dept]} <b>${no}. ${esc(DEPT_LABELS[dept])}</b>\n`;
+          text += `${iconOf(dept.key)} <b>${no}. ${esc(labelOf(dept.key))}</b>\n`;
           text += `Kechikayotgan: <b>${rows.length} ta</b>\n\n`;
           text += `💸 Kunlik jarima: <b>${fmtMoney(dailyPenalty)}</b>\n`;
           text += `🔴 Umumiy jarima: <b>${fmtMoney(totalPenalty)}</b>\n\n`;

@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
-import type { AppRole } from "@/lib/departments";
+
+export type SystemRole = "general" | "admin" | "user";
 
 export interface AuthState {
   user: User | null;
   session: Session | null;
-  roles: AppRole[];
-  isAdmin: boolean;
+  systemRole: SystemRole | null;
+  depts: string[];
+  isGeneral: boolean;
+  isAdmin: boolean; // admin OR general — broad CRUD scope on orders
   loading: boolean;
 }
 
 export function useAuth(): AuthState {
   const [session, setSession] = useState<Session | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [systemRole, setSystemRole] = useState<SystemRole | null>(null);
+  const [depts, setDepts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,23 +33,27 @@ export function useAuth(): AuthState {
 
   useEffect(() => {
     if (!session?.user) {
-      setRoles([]);
+      setSystemRole(null);
+      setDepts([]);
       return;
     }
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", session.user.id)
-      .then(({ data }) => {
-        setRoles((data ?? []).map((r) => r.role as AppRole));
-      });
+    const uid = session.user.id;
+    Promise.all([
+      supabase.from("profiles").select("system_role").eq("id", uid).maybeSingle(),
+      supabase.from("user_departments").select("department_key").eq("user_id", uid),
+    ]).then(([p, d]) => {
+      setSystemRole(((p.data as any)?.system_role as SystemRole) ?? "user");
+      setDepts(((d.data ?? []) as any[]).map((x) => x.department_key));
+    });
   }, [session?.user?.id]);
 
   return {
     user: session?.user ?? null,
     session,
-    roles,
-    isAdmin: roles.includes("admin"),
+    systemRole,
+    depts,
+    isGeneral: systemRole === "general",
+    isAdmin: systemRole === "admin" || systemRole === "general",
     loading,
   };
 }

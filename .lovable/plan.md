@@ -1,72 +1,96 @@
-# Ishlab chiqarish CRM — Reja
 
-Trello/Kanban uslubidagi zayavkalar boshqaruv tizimi, 9 bo'lim bo'yicha pipeline, role-based auth, jarima hisoblash va Telegram integratsiyasi.
+# Reja: Dinamik bo'limlar va yangi foydalanuvchi tizimi
 
-## Texnologiya
-- **Frontend**: TanStack Start (React 19) + Tailwind v4 + shadcn
-- **Backend**: TanStack server functions
-- **DB + Auth**: Lovable Cloud (Supabase)
-- **Cron**: pg_cron → har kuni 09:00 Telegram hisobot
-- **Telegram**: Bot API, secrets'da saqlanadi
+## 1) Ma'lumotlar bazasi (eng katta o'zgarish)
 
-## Bo'limlar (pipeline tartibida)
-Ojidaniya → Stolyarka → Stolyarka OTK → Malyarka → Malyarka OTK → Kraska → Kraska OTK → Upakovka → Arxiv
+Hozir `department` va `app_role` PostgreSQL enum'lari. Yangi bo'lim qo'shish/o'chirish uchun butun sxemani jadvalga o'tkazamiz.
 
-## Database
-- `profiles` — foydalanuvchi (id, full_name)
-- `user_roles` — `app_role` enum: `admin`, `ojidaniya`, `stolyarka`, `stolyarka_otk`, `malyarka`, `malyarka_otk`, `kraska`, `kraska_otk`, `upakovka`, `arxiv`
-- `orders` — zayavkalar:
-  - number, filial, doors_count, product_type, comment
-  - current_department (enum), status (`pending_accept` qizil / `in_progress` sariq / `delivered` yashil)
-  - deadline (timestamp), pogonaj_required (bool), pogonaj_status
-  - position_deadlines (jsonb) — har bo'lim uchun alohida srok (faqat admin o'zgartiradi)
-  - created_at, updated_at, finished_at
-- `order_history` — audit log (har QABUL/TOPSHIRDIM)
-- `penalties` — kechikish/jarima yozuvi
+**Yangi jadvallar:**
+- `departments(key text PK, label text, icon text, sort_order int, active bool)` — bo'limlar katalogi. Boshlang'ich 9 ta qator (ojidaniya…arxiv) seed qilinadi.
+- `user_departments(user_id uuid, department_key text)` — bir foydalanuvchi → ko'p bo'lim.
+- `profiles.system_role text` — `'general' | 'admin' | 'user'` (yangi ustun). `user_roles` jadvali eskirib qoladi (saqlanadi, lekin ishlatilmaydi).
 
-## RLS qoidalari
-- Admin: hammasiga to'liq access
-- Bo'lim: faqat `current_department = own_role` bo'lgan kartani **update** qila oladi (QABUL QILDIM / TOPSHIRDIM)
-- Boshqa kartalar — faqat read
-- Deadline'larni faqat admin yangilaydi (RLS + server function check)
+**O'zgartirilgan ustunlar:**
+- `orders.current_department`, `orders.previous_department` → `text` (enum o'rniga, departments.key ga ishora).
+- `order_history.from_department`, `to_department` → `text`.
 
-## Server functions
-- `createOrder` (admin) — Ojidaniya'ga tushadi
-- `acceptOrder` — joriy bo'lim qabul qiladi (status → in_progress, qizildan sariqqa)
-- `deliverOrder` — keyingi bo'limga topshiradi (status → pending_accept qizil)
-- `updateDeadline` (admin) — istalgan position srokini o'zgartiradi
-- `moveOrder` (admin) — istalgan bo'limga ko'chiradi
-- `getDelayReport` — kechikish hisoboti + jarima (100 000 so'm/kun)
-- `sendDailyTelegramReport` — chat ID'ga formatlangan xabar (sizning shablon bo'yicha)
+**Yangi yordamchi funksiyalar (SECURITY DEFINER):**
+- `is_general(uid)` — `profiles.system_role = 'general'`.
+- `is_admin_or_general(uid)` — admin yoki general.
+- `user_has_dept(uid, dept_key)` — `user_departments` orqali tekshiradi.
 
-## Kanban UI
-- 9 ustun, drag-and-drop yo'q (button orqali harakat)
-- Karta ranglari: qizil/sariq/yashil
-- Filter: bo'lim, status, filial, qidiruv
-- Mobile responsive (gorizontal scroll)
+**RLS qayta yoziladi:**
+- `orders` UPDATE: `is_admin_or_general(uid) OR user_has_dept(uid, current_department)`.
+- `departments`, `user_departments`: faqat general CRUD; barcha autentifikatsiyalangan foydalanuvchilar SELECT.
+- `Settings` jadvali: faqat general yoza oladi.
 
-## Admin paneli
-- Yangi zayavka qo'shish
-- Har bo'lim uchun srok qo'yish (Ojidaniya'da ham pozitsiya bo'yicha)
-- Kechikishlar dashboardi (jami jarima, bo'lim bo'yicha breakdown)
-- AI analiz: Lovable AI Gateway orqali — top muammoli bo'limlar, prognoz, tavsiyalar
-- Statistika: tugatilgan/jarayonda/kechikkan, vaqt bo'yicha grafik
+**Eski enum'lar va `user_in_dept`/`role_to_dept`/`has_role` funksiyalari o'chiriladi** (RLS'da ishlatilmagandan keyin).
 
-## Telegram integratsiyasi
-- Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (Lovable Cloud secrets'ga, kodga emas)
-- Har kuni 09:00 da pg_cron `/api/public/cron/telegram-report` ni chaqiradi
-- Xabar shabloni: siz yuborgan format (bo'lim bo'yicha, jarima, batafsil ro'yxat)
-- Karta yaratish/topshirish — ixtiyoriy notification
+## 2) Login oqimi (Pozitsa + Parol)
 
-## Auth
-- Email/parol (admin yaratadi foydalanuvchilarni)
-- Sign-up ochiq emas — faqat admin user yaratadi
-- Birinchi admin: SQL'da qo'lda tayinlanadi (yo'riqnomada ko'rsataman)
+Foydalanuvchilar uchun login = bo'lim tanlash + parol.
 
-## Iteratsiyalar
-1. **V1 (hozir)**: Auth, Kanban, role permission, CRUD, jarima, deadline
-2. **V2**: Telegram integratsiya + cron
-3. **V3**: AI analiz, statistika dashboard, advanced filter
+Texnik qiyinchilik: Supabase Auth email/parol talab qiladi va parol orqali `email` ni topa olmaymiz. Yechim:
 
-## Xavfsizlik eslatmasi
-Siz chatda yuborgan Telegram bot token ochiq qoldi — yangi token oling (BotFather → /revoke), keyin Lovable Cloud secrets formasi orqali kiritasiz.
+- Yangi foydalanuvchi yaratilganda **avtomatik** noyob email beriladi: `u-${shortId}@crm.local`. Foydalanuvchi buni bilmaydi.
+- `profiles` ga `login_dept text` va `login_password_plain text` qo'shamiz (faqat general o'qiy oladi — RLS bilan himoyalanadi). 
+- Login formada bo'lim tanlanadi + parol kiritiladi. Server funksiyasi `loginByDeptPassword({dept, password})` `supabaseAdmin` orqali shu bo'lim + parolga mos foydalanuvchi emailini topadi, keyin browser uni `signInWithPassword` qiladi.
+- **Cheklov**: (bo'lim, parol) jufti noyob bo'lishi shart. Sozlamalarda foydalanuvchi qo'shilayotganda real-vaqtli tekshiruv: agar shu bo'limda shu parol allaqachon bor bo'lsa, ogohlantirish.
+
+General uchun: alohida `general` bo'limi yaratiladi (login ro'yxatida ko'rinadi, lekin board kolonkasi sifatida ko'rinmaydi). General login: bo'lim = "👑 General", parol = `General2323`. Bu hisob migratsiya paytida seed qilinadi.
+
+## 3) Sozlamalar UI (faqat General)
+
+Hozirgi `SettingsDialog` 4 tabga kengaytiriladi:
+
+1. **Umumiy** — jarima, telegram vaqti (avvalgidek).
+2. **Bo'limlar** ⭐ yangi — bo'limlar ro'yxati (drag-tartib), qo'shish/o'chirish/nomini va emojisini tahrirlash. O'chirishdan oldin: agar shu bo'limda zayavkalar bor bo'lsa, ogohlantirish.
+3. **Foydalanuvchilar** — qayta yozildi:
+   - "Yangi foydalanuvchi" formasi: 👤 Ism, 🔒 Parol, ☑️ Rol (User / Admin), ☑️ Bo'limlar checkbox ro'yxati (multi-select, dinamik).
+   - Mavjud foydalanuvchilar ro'yxati: parolni tahrirlash, bo'limlarni o'zgartirish, rolni o'zgartirish, o'chirish.
+4. **Filiallar / Mahsulotlar** — avvalgidek.
+
+## 4) Rollar va ruxsatlar
+
+- **General**: hamma narsa, shu jumladan Sozlamalar. Yagona hisob.
+- **Admin**: hamma bo'limlarni ko'radi, hamma zayavkalarni tahrirlay/yarata oladi, statistika ko'radi. **Sozlamalarga ruxsat YO'Q**.
+- **User**: faqat o'ziga biriktirilgan bo'lim(lar) kolonkalarini ko'radi, faqat o'sha bo'limlarda "Qabul qildim" / "Topshirdim" qila oladi. Boshqa hech narsa.
+
+UI ko'rinishi (`src/routes/index.tsx`):
+- "Yangi zayavka", Sozlamalar tugmasi: General va Admin'ga (Sozlamalar faqat General).
+- Statistika: General + Admin.
+- User: faqat tegishli kolonkalar, "Qabul qildim/Topshirdim" tugmalari, sroklar va tahrir tugmalari yashirin.
+
+## 5) Frontend tozalash
+
+- `src/lib/departments.ts` qattiq ro'yxat o'rniga **runtime fetch** qiladi (`useDepartments()` hook + cache).
+- `useAuth` `profiles.system_role` va `user_departments` ni qaytaradi.
+- `src/routes/login.tsx`: username inputi olib tashlanadi, o'rniga bo'lim `Select`.
+- Tezlik: departments/users `react-query` bilan cache, Kanban karta `memo`.
+
+## 6) Texnik tafsilotlar
+
+```text
+Migratsiya tartibi:
+1. departments jadvali yaratish + 9 ta seed
+2. user_departments yaratish
+3. profiles ga system_role, login_dept, login_password_plain qo'shish
+4. orders/order_history ustunlarini text ga konversiya (enum→text cast)
+5. enum'larni va eski funksiyalarni drop qilish
+6. Yangi RLS funksiyalari va policy'lar
+7. Mavjud admin -> general qilib belgilash, General2323 paroli bilan
+```
+
+```text
+Server fn'lar:
+- loginByDeptPassword(dept, password) -> { email } (admin client)
+- createUser(name, password, role, dept_keys[])
+- updateUser(id, {password?, role?, dept_keys?})
+- deleteUser(id)
+- createDepartment(key, label, icon)
+- deleteDepartment(key)
+```
+
+## Tasdiqlash
+
+Bu migratsiya orders/order_history'ni text ustunlarga ko'chiradi va enum'larni o'chiradi. Mavjud zayavkalar saqlanadi, lekin operatsiya qaytarib bo'lmaydi. Davom etamizmi?

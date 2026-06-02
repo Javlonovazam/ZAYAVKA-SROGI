@@ -32,35 +32,62 @@ export type Database = {
         }
         Relationships: []
       }
+      departments: {
+        Row: {
+          active: boolean
+          created_at: string
+          icon: string
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          icon?: string
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          icon?: string
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       order_history: {
         Row: {
           action: string
           created_at: string
-          from_department: Database["public"]["Enums"]["department"] | null
+          from_department: string | null
           id: string
           note: string | null
           order_id: string
-          to_department: Database["public"]["Enums"]["department"] | null
+          to_department: string | null
           user_id: string | null
         }
         Insert: {
           action: string
           created_at?: string
-          from_department?: Database["public"]["Enums"]["department"] | null
+          from_department?: string | null
           id?: string
           note?: string | null
           order_id: string
-          to_department?: Database["public"]["Enums"]["department"] | null
+          to_department?: string | null
           user_id?: string | null
         }
         Update: {
           action?: string
           created_at?: string
-          from_department?: Database["public"]["Enums"]["department"] | null
+          from_department?: string | null
           id?: string
           note?: string | null
           order_id?: string
-          to_department?: Database["public"]["Enums"]["department"] | null
+          to_department?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -77,7 +104,7 @@ export type Database = {
         Row: {
           comment: string
           created_at: string
-          current_department: Database["public"]["Enums"]["department"]
+          current_department: string
           deadline: string | null
           doors_count: number
           entered_current_dept_at: string
@@ -88,7 +115,7 @@ export type Database = {
           pogonaj_required: boolean
           pogonaj_status: string
           position_deadlines: Json
-          previous_department: Database["public"]["Enums"]["department"] | null
+          previous_department: string | null
           product_type: string
           status: Database["public"]["Enums"]["order_status"]
           updated_at: string
@@ -96,7 +123,7 @@ export type Database = {
         Insert: {
           comment?: string
           created_at?: string
-          current_department?: Database["public"]["Enums"]["department"]
+          current_department?: string
           deadline?: string | null
           doors_count?: number
           entered_current_dept_at?: string
@@ -107,7 +134,7 @@ export type Database = {
           pogonaj_required?: boolean
           pogonaj_status?: string
           position_deadlines?: Json
-          previous_department?: Database["public"]["Enums"]["department"] | null
+          previous_department?: string | null
           product_type?: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
@@ -115,7 +142,7 @@ export type Database = {
         Update: {
           comment?: string
           created_at?: string
-          current_department?: Database["public"]["Enums"]["department"]
+          current_department?: string
           deadline?: string | null
           doors_count?: number
           entered_current_dept_at?: string
@@ -126,7 +153,7 @@ export type Database = {
           pogonaj_required?: boolean
           pogonaj_status?: string
           position_deadlines?: Json
-          previous_department?: Database["public"]["Enums"]["department"] | null
+          previous_department?: string | null
           product_type?: string
           status?: Database["public"]["Enums"]["order_status"]
           updated_at?: string
@@ -138,33 +165,86 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          system_role: string
         }
         Insert: {
           created_at?: string
           full_name?: string
           id: string
+          system_role?: string
         }
         Update: {
           created_at?: string
           full_name?: string
           id?: string
+          system_role?: string
         }
         Relationships: []
+      }
+      user_credentials: {
+        Row: {
+          login_dept: string
+          password_plain: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          login_dept: string
+          password_plain: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          login_dept?: string
+          password_plain?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_departments: {
+        Row: {
+          created_at: string
+          department_key: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_key: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_key?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_departments_department_key_fkey"
+            columns: ["department_key"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["key"]
+          },
+        ]
       }
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -174,52 +254,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_general: { Args: { _uid: string }; Returns: boolean }
       reschedule_telegram_cron: {
         Args: { hour_utc: number }
         Returns: undefined
       }
-      role_to_dept: {
-        Args: { _role: Database["public"]["Enums"]["app_role"] }
-        Returns: Database["public"]["Enums"]["department"]
-      }
-      user_in_dept: {
-        Args: {
-          _dept: Database["public"]["Enums"]["department"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+      user_has_dept: { Args: { _dept: string; _uid: string }; Returns: boolean }
     }
     Enums: {
-      app_role:
-        | "admin"
-        | "ojidaniya"
-        | "stolyarka"
-        | "stolyarka_otk"
-        | "malyarka"
-        | "malyarka_otk"
-        | "kraska"
-        | "kraska_otk"
-        | "upakovka"
-        | "arxiv"
-      department:
-        | "ojidaniya"
-        | "stolyarka"
-        | "stolyarka_otk"
-        | "malyarka"
-        | "malyarka_otk"
-        | "kraska"
-        | "kraska_otk"
-        | "upakovka"
-        | "arxiv"
       order_status: "pending_accept" | "in_progress" | "delivered"
     }
     CompositeTypes: {
@@ -348,29 +391,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: [
-        "admin",
-        "ojidaniya",
-        "stolyarka",
-        "stolyarka_otk",
-        "malyarka",
-        "malyarka_otk",
-        "kraska",
-        "kraska_otk",
-        "upakovka",
-        "arxiv",
-      ],
-      department: [
-        "ojidaniya",
-        "stolyarka",
-        "stolyarka_otk",
-        "malyarka",
-        "malyarka_otk",
-        "kraska",
-        "kraska_otk",
-        "upakovka",
-        "arxiv",
-      ],
       order_status: ["pending_accept", "in_progress", "delivered"],
     },
   },

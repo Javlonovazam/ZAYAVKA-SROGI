@@ -1,23 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDepartments } from "@/lib/departments";
+import { loginByDeptPasswordFn } from "@/lib/orders.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-// Username → email conversion. We store users with synthetic emails of the form
-// `${username}@crm.local` so the UI only ever needs a username + password.
-export function usernameToEmail(u: string) {
-  return `${u.trim().toLowerCase()}@crm.local`;
-}
+const GENERAL_KEY = "__general__";
 
 function LoginPage() {
-  const [username, setUsername] = useState("");
+  const depts = useDepartments();
+  const lookup = useServerFn(loginByDeptPasswordFn);
+  const [dept, setDept] = useState<string>("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -29,17 +31,18 @@ function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username || !password) return;
+    if (!dept || !password) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: usernameToEmail(username),
-      password,
-    });
-    setLoading(false);
-    if (error) toast.error("Login yoki parol noto'g'ri");
-    else {
+    try {
+      const { email } = await lookup({ data: { dept, password } });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       toast.success("✅ Tizimga kirildi");
       window.location.href = "/";
+    } catch (err: any) {
+      toast.error(err?.message?.includes("Invalid") ? "Parol noto'g'ri" : (err.message || "Kirishda xato"));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -49,23 +52,34 @@ function LoginPage() {
         <div className="mb-8 text-center">
           <div className="text-5xl mb-3">🏭</div>
           <h1 className="text-2xl font-bold tracking-tight">Ishlab chiqarish CRM</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Login va parol bilan kiring</p>
+          <p className="mt-2 text-sm text-muted-foreground">Pozitsa va parol bilan kiring</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <Label htmlFor="username">👤 Login</Label>
-            <Input id="username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="masalan: stolyarka" />
+            <Label>🎯 Pozitsa</Label>
+            <Select value={dept} onValueChange={setDept}>
+              <SelectTrigger><SelectValue placeholder="Pozitsa tanlang..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENERAL_KEY}>👑 General</SelectItem>
+                {(depts.data ?? []).map((d) => (
+                  <SelectItem key={d.key} value={d.key}>{d.icon} {d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label htmlFor="password">🔒 Parol</Label>
-            <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="password" type="password" autoComplete="current-password"
+              required value={password} onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !dept || !password}>
             {loading ? "Kirilmoqda..." : "🚪 Kirish"}
           </Button>
         </form>
         <p className="mt-6 text-xs text-center text-muted-foreground">
-          Hisob admin tomonidan yaratiladi
+          Hisob General tomonidan yaratiladi
         </p>
       </div>
     </div>
