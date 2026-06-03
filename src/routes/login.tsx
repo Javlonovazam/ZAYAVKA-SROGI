@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,17 +8,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDepartments } from "@/lib/departments";
-import { loginByDeptPasswordFn } from "@/lib/orders.functions";
+import { loginByDeptPasswordFn, listLoginDeptsFn } from "@/lib/orders.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const GENERAL_KEY = "__general__";
+function specialLabel(key: string): string | null {
+  if (key === "__general__") return "👑 General";
+  if (key === "__admin__") return "🛡️ Admin";
+  if (key === "__user__") return "👤 User";
+  return null;
+}
 
 function LoginPage() {
   const depts = useDepartments();
+  const listFn = useServerFn(listLoginDeptsFn);
+  const loginKeys = useQuery({ queryKey: ["login-keys"], queryFn: () => listFn() });
   const lookup = useServerFn(loginByDeptPasswordFn);
   const [dept, setDept] = useState<string>("");
   const [password, setPassword] = useState("");
@@ -46,6 +54,18 @@ function LoginPage() {
     }
   }
 
+  const keys = loginKeys.data?.keys ?? [];
+  const deptList = depts.data ?? [];
+  const renderOption = (k: string) => {
+    const sp = specialLabel(k);
+    if (sp) return sp;
+    const d = deptList.find((x) => x.key === k);
+    return d ? `${d.icon} ${d.label}` : k;
+  };
+
+  // ensure General is always selectable even if creds list is empty
+  const showKeys = keys.length > 0 ? keys : ["__general__"];
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_oklch(0.97_0.04_265)_0%,_oklch(0.985_0.005_240)_45%,_oklch(0.95_0.03_180)_100%)] p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl p-8 backdrop-blur">
@@ -60,9 +80,8 @@ function LoginPage() {
             <Select value={dept} onValueChange={setDept}>
               <SelectTrigger><SelectValue placeholder="Pozitsa tanlang..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={GENERAL_KEY}>👑 General</SelectItem>
-                {(depts.data ?? []).map((d) => (
-                  <SelectItem key={d.key} value={d.key}>{d.icon} {d.label}</SelectItem>
+                {showKeys.map((k) => (
+                  <SelectItem key={k} value={k}>{renderOption(k)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
