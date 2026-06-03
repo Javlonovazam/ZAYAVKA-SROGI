@@ -885,10 +885,12 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
               </div>
             </div>
             <div>
-              <Label className="text-xs">Login bo'limi</Label>
+              <Label className="text-xs">Login pozitsasi</Label>
               <Select value={e.login_dept} onValueChange={(v) => setE({ ...e, login_dept: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__admin__">🛡️ Admin</SelectItem>
+                  <SelectItem value="__user__">👤 User</SelectItem>
                   {e.dept_keys.map((k: string) => {
                     const d = depts.find((x: DeptRow) => x.key === k);
                     return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
@@ -896,6 +898,7 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
                 </SelectContent>
               </Select>
             </div>
+
           </>
         )}
         <div className="flex gap-2 pt-2">
