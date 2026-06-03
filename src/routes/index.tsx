@@ -842,11 +842,14 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
     dept_keys: u.depts as string[], login_dept: u.login_dept as string,
   });
   const isGeneral = u.system_role === "general";
+  const SPECIAL = ["__admin__", "__user__"];
   const toggle = (k: string) => {
     const arr = e.dept_keys.includes(k) ? e.dept_keys.filter((y: string) => y !== k) : [...e.dept_keys, k];
-    const ld = arr.includes(e.login_dept) ? e.login_dept : (arr[0] || "");
+    const ldOk = SPECIAL.includes(e.login_dept) || arr.includes(e.login_dept);
+    const ld = ldOk ? e.login_dept : (arr[0] || "__user__");
     setE({ ...e, dept_keys: arr, login_dept: ld });
   };
+
 
   return (
     <details className="rounded-lg border border-border bg-card">
