@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles, ExternalLink } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend, LineChart, Line,
@@ -42,6 +43,8 @@ function StatsPage() {
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
+  const [filialFilter, setFilialFilter] = useState<string>("all");
+  const [openDeptKey, setOpenDeptKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.loading && (!auth.user || !auth.isAdmin)) navigate({ to: "/" });
@@ -92,18 +95,45 @@ function StatsPage() {
   });
 
   const since = periodStart(period);
-  const orders = useMemo(() => allOrders.filter((o: any) => !since || new Date(o.created_at) >= since), [allOrders, since]);
+  const filials = useMemo(
+    () => Array.from(new Set((allOrders as any[]).map((o) => o.filial).filter(Boolean))).sort(),
+    [allOrders],
+  );
+
+  const orders = useMemo(
+    () => (allOrders as any[]).filter((o) =>
+      (!since || new Date(o.created_at) >= since) &&
+      (filialFilter === "all" || o.filial === filialFilter)
+    ),
+    [allOrders, since, filialFilter],
+  );
   const filteredHistory = useMemo(() => history.filter((h: any) => !since || new Date(h.created_at) >= since), [history, since]);
 
   if (auth.loading) return <div className="min-h-screen flex items-center justify-center">Yuklanmoqda...</div>;
 
-  const byDept = deptList.map((d) => {
+  // helper: who is blamed for delay
+  const blameOf = (o: any) => (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
+
+  // per-department breakdown (table + charts)
+  const breakdown = deptList.map((d) => {
     const all = orders.filter((o: any) => o.current_department === d.key);
-    const delayed = all.filter((o: any) => {
+    const delayedOrders = orders.filter((o: any) => {
+      if (o.status === "delivered") return false;
+      if (blameOf(o) !== d.key) return false;
       const dl = o.position_deadlines?.[d.key] || o.deadline;
-      return o.status !== "delivered" && calcDelayDays(dl) > 0;
+      return calcDelayDays(dl) > 0;
     });
-    return { name: d.label, jami: all.length, kechikkan: delayed.length };
+    const totalDelayDays = delayedOrders.reduce((s: number, o: any) => {
+      const dl = o.position_deadlines?.[d.key] || o.deadline;
+      return s + calcDelayDays(dl);
+    }, 0);
+    const penalty = totalDelayDays * PENALTY;
+    return {
+      key: d.key, label: d.label, icon: d.icon,
+      total: all.length, delayed: delayedOrders.length,
+      delayDays: totalDelayDays, penalty,
+      delayedOrders,
+    };
   });
 
   const statusCounts = [
@@ -129,26 +159,16 @@ function StatsPage() {
     return { day: d.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit" }), Yangi: created, Tugagan: finished };
   });
 
-  const penaltyByDept = deptList.map((d) => {
-    const sum = orders
-      .filter((o: any) => {
-        const blame = (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
-        return blame === d.key && o.status !== "delivered";
-      })
-      .reduce((acc: number, o: any) => {
-        const blame = (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
-        const dl = o.position_deadlines?.[blame] || o.deadline;
-        return acc + calcDelayDays(dl) * PENALTY;
-      }, 0);
-    return { name: d.label, jarima: sum };
-  });
+  const totalDelayed = breakdown.reduce((s, x) => s + x.delayed, 0);
+  const totalPenalty = breakdown.reduce((s, x) => s + x.penalty, 0);
+  const openDept = breakdown.find((b) => b.key === openDeptKey) || null;
 
-  const totalDelayed = orders.filter((o: any) => {
-    const blame = (o.status === "pending_accept" && o.previous_department) ? o.previous_department : o.current_department;
-    const dl = o.position_deadlines?.[blame] || o.deadline;
-    return o.status !== "delivered" && calcDelayDays(dl) > 0;
-  }).length;
-  const totalPenalty = penaltyByDept.reduce((s: number, x: { jarima: number }) => s + x.jarima, 0);
+  const runAi = async () => {
+    setAiLoading(true); setAiText("");
+    try { const r = await analyze({ data: undefined as any }); setAiText(r.text); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setAiLoading(false); }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,16 +185,13 @@ function StatsPage() {
               <SelectItem value="all">🌐 Hammasi</SelectItem>
             </SelectContent>
           </Select>
-          {auth.isAdmin && (
-            <Button size="sm" className="ml-auto" disabled={aiLoading} onClick={async () => {
-              setAiLoading(true); setAiText("");
-              try { const r = await analyze({ data: undefined as any }); setAiText(r.text); }
-              catch (e: any) { toast.error(e.message); }
-              finally { setAiLoading(false); }
-            }}>
-              <Sparkles className="h-4 w-4 mr-1" />{aiLoading ? "Tahlil qilinmoqda..." : "AI tahlil"}
-            </Button>
-          )}
+          <Select value={filialFilter} onValueChange={setFilialFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="🏢 Filial" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">🏢 Barcha filiallar</SelectItem>
+              {filials.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </header>
 
@@ -186,27 +203,80 @@ function StatsPage() {
           <StatCard label="💰 Jami jarima" value={formatMoney(totalPenalty)} accent="text-status-pending" />
         </div>
 
-        {aiText && (
-          <Card className="p-5 border-primary/30 bg-primary/5 animate-slide-up">
-            <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-primary">
-              <Sparkles className="h-4 w-4" />AI tahlil natijasi
-            </div>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiText}</div>
-          </Card>
-        )}
-
-        <Tabs defaultValue="charts">
-          <TabsList>
+        <Tabs defaultValue="dashboard">
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
             <TabsTrigger value="charts">📈 Grafiklar</TabsTrigger>
+            <TabsTrigger value="ai">🤖 AI tahlil</TabsTrigger>
             <TabsTrigger value="history">🕘 Tarix ({filteredHistory.length})</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dashboard" className="pt-4 space-y-4">
+            <Card className="p-0 overflow-hidden">
+              <div className="p-4 border-b border-border">
+                <h3 className="font-semibold">🏭 Bo'limlar bo'yicha jarima hisoboti</h3>
+                <p className="text-xs text-muted-foreground mt-1">Bo'lim ustiga bosing — kechikkan zayavkalar ro'yxati ochiladi</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs uppercase">
+                    <tr>
+                      <th className="text-left p-3">Bo'lim</th>
+                      <th className="text-right p-3">Jami zayavka</th>
+                      <th className="text-right p-3">⏳ Kechikkan</th>
+                      <th className="text-right p-3">📅 Jami kechikish (kun)</th>
+                      <th className="text-right p-3">💰 Jarima summasi</th>
+                      <th className="p-3 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breakdown.map((b) => (
+                      <tr
+                        key={b.key}
+                        className={`border-t border-border ${b.delayed > 0 ? "hover:bg-status-pending/5 cursor-pointer" : "hover:bg-secondary/30"}`}
+                        onClick={() => b.delayed > 0 && setOpenDeptKey(b.key)}
+                      >
+                        <td className="p-3 font-medium">{b.icon} {b.label}</td>
+                        <td className="p-3 text-right">{b.total}</td>
+                        <td className={`p-3 text-right ${b.delayed > 0 ? "text-status-pending font-bold" : ""}`}>{b.delayed}</td>
+                        <td className="p-3 text-right">{b.delayDays}</td>
+                        <td className={`p-3 text-right ${b.penalty > 0 ? "text-status-pending font-bold" : ""}`}>{formatMoney(b.penalty)}</td>
+                        <td className="p-3 text-muted-foreground">{b.delayed > 0 && <ExternalLink className="h-4 w-4" />}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-border bg-secondary/30 font-bold">
+                      <td className="p-3">JAMI</td>
+                      <td className="p-3 text-right">{orders.length}</td>
+                      <td className="p-3 text-right text-status-pending">{totalDelayed}</td>
+                      <td className="p-3 text-right">{breakdown.reduce((s, x) => s + x.delayDays, 0)}</td>
+                      <td className="p-3 text-right text-status-pending">{formatMoney(totalPenalty)}</td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <h3 className="font-semibold mb-4">💰 Jarima bo'limlar bo'yicha</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={breakdown.map((b) => ({ name: b.label, jarima: b.penalty }))}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={70} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: any) => formatMoney(Number(v))} />
+                  <Bar dataKey="jarima" fill="#ef4444" />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="charts" className="pt-4">
             <div className="grid lg:grid-cols-2 gap-4">
               <Card className="p-5">
                 <h3 className="font-semibold mb-4">Bo'limlar bo'yicha zayavkalar</h3>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={byDept}>
+                  <BarChart data={breakdown.map((b) => ({ name: b.label, jami: b.total, kechikkan: b.delayed }))}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={70} />
                     <YAxis tick={{ fontSize: 11 }} />
@@ -245,20 +315,33 @@ function StatsPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </Card>
-
-              <Card className="p-5 lg:col-span-2">
-                <h3 className="font-semibold mb-4">Bo'limlar bo'yicha jarima (so'm)</h3>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={penaltyByDept}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={70} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: any) => formatMoney(Number(v))} />
-                    <Bar dataKey="jarima" fill="#ef4444" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="ai" className="pt-4">
+            <Card className="p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI har kunlik tahlil</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Jarayonni baholaydi, bottleneck bo'limlarni topadi va aniq tavsiyalar beradi
+                  </p>
+                </div>
+                <Button onClick={runAi} disabled={aiLoading}>
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  {aiLoading ? "Tahlil qilinmoqda..." : "Yangi tahlil"}
+                </Button>
+              </div>
+              {aiText ? (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed border border-primary/20 bg-primary/5 rounded-lg p-4">
+                  {aiText}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-10 border-2 border-dashed border-border rounded-lg">
+                  {aiLoading ? "⏳ Tahlil qilinmoqda..." : "Tahlilni boshlash uchun “Yangi tahlil” tugmasini bosing"}
+                </div>
+              )}
+            </Card>
           </TabsContent>
 
           <TabsContent value="history" className="pt-4">
@@ -287,6 +370,46 @@ function StatsPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={!!openDept} onOpenChange={(o) => !o && setOpenDeptKey(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {openDept && `${openDept.icon} ${openDept.label} — kechikkan zayavkalar`}
+            </DialogTitle>
+          </DialogHeader>
+          {openDept && (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              <div className="text-sm flex flex-wrap gap-4 p-3 bg-secondary/40 rounded-lg">
+                <span>⏳ <b>{openDept.delayed}</b> ta zayavka</span>
+                <span>📅 <b>{openDept.delayDays}</b> kun</span>
+                <span className="text-status-pending">💰 <b>{formatMoney(openDept.penalty)}</b></span>
+              </div>
+              {openDept.delayedOrders.length === 0 && (
+                <div className="text-center text-sm text-muted-foreground py-6">Bo'sh</div>
+              )}
+              {openDept.delayedOrders.map((o: any) => {
+                const dl = o.position_deadlines?.[openDept.key] || o.deadline;
+                const dd = calcDelayDays(dl);
+                return (
+                  <div key={o.id} className="border border-border rounded-lg p-3 flex items-center justify-between gap-3 hover:bg-secondary/30">
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm font-semibold">#{o.number}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        🏢 {o.filial || "—"} • 🚪 {o.doors_count} ta • {o.product_type || ""}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-status-pending font-bold text-sm">⏳ {dd} kun</div>
+                      <div className="text-xs text-status-pending">{formatMoney(dd * PENALTY)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
