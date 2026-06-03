@@ -762,10 +762,14 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
 
   const [nu, setNu] = useState({ full_name: "", password: "", role: "user" as "user" | "admin", dept_keys: [] as string[], login_dept: "" });
 
+  const SPECIAL = ["__admin__", "__user__"];
+  const specialLabel = (k: string) => k === "__admin__" ? "🛡️ Admin" : k === "__user__" ? "👤 User" : k;
+
   const toggle = (k: string) => {
     setNu((x) => {
       const arr = x.dept_keys.includes(k) ? x.dept_keys.filter((y) => y !== k) : [...x.dept_keys, k];
-      const ld = arr.includes(x.login_dept) ? x.login_dept : (arr[0] || "");
+      const ldOk = SPECIAL.includes(x.login_dept) || arr.includes(x.login_dept);
+      const ld = ldOk ? x.login_dept : (arr[0] || "__user__");
       return { ...x, dept_keys: arr, login_dept: ld };
     });
   };
@@ -781,12 +785,12 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
         <div>
           <Label className="text-xs">🎭 Rol</Label>
           <div className="flex gap-3 mt-1">
-            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "user"} onChange={() => setNu({ ...nu, role: "user" })} /> 👷 User</label>
-            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "admin"} onChange={() => setNu({ ...nu, role: "admin" })} /> 👑 Admin</label>
+            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "user"} onChange={() => setNu({ ...nu, role: "user", login_dept: nu.login_dept || "__user__" })} /> 👷 User</label>
+            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "admin"} onChange={() => setNu({ ...nu, role: "admin", login_dept: nu.login_dept || "__admin__" })} /> 🛡️ Admin</label>
           </div>
         </div>
         <div>
-          <Label className="text-xs">☑️ Ruxsat berilgan bo'limlar</Label>
+          <Label className="text-xs">☑️ Ruxsat berilgan bo'limlar (qabul/topshirish)</Label>
           <div className="grid grid-cols-2 gap-1 mt-1 max-h-40 overflow-y-auto p-2 rounded-lg border border-border bg-card">
             {depts.map((d) => (
               <label key={d.key} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -796,29 +800,31 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
             ))}
           </div>
         </div>
-        {nu.dept_keys.length > 0 && (
-          <div>
-            <Label className="text-xs">🚪 Login bo'limi (kirishda tanlanadi)</Label>
-            <Select value={nu.login_dept} onValueChange={(v) => setNu({ ...nu, login_dept: v })}>
-              <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
-              <SelectContent>
-                {nu.dept_keys.map((k) => {
-                  const d = depts.find((x) => x.key === k);
-                  return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div>
+          <Label className="text-xs">🚪 Login pozitsasi (kirishda tanlanadi)</Label>
+          <Select value={nu.login_dept} onValueChange={(v) => setNu({ ...nu, login_dept: v })}>
+            <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__admin__">🛡️ Admin</SelectItem>
+              <SelectItem value="__user__">👤 User</SelectItem>
+              {nu.dept_keys.map((k) => {
+                const d = depts.find((x) => x.key === k);
+                return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
+              })}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-1">Kirish oynasidagi “Pozitsa” ro'yxatida shu nom chiqadi</p>
+        </div>
         <Button className="w-full" disabled={!nu.full_name || !nu.password || nu.dept_keys.length === 0 || !nu.login_dept} onClick={async () => {
           try {
             await createFn({ data: nu });
             toast.success("✅ Yaratildi");
-            setNu({ full_name: "", password: "", role: "user", dept_keys: [], login_dept: "" });
+            setNu({ full_name: "", password: "", role: "user", dept_keys: [], login_dept: "__user__" });
             refetch();
           } catch (e: any) { toast.error(e.message); }
         }}>Yaratish</Button>
       </div>
+
 
       <div className="space-y-2 max-h-96 overflow-y-auto">
         <div className="font-semibold text-sm">📋 Mavjud foydalanuvchilar</div>
