@@ -763,7 +763,7 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
   const [nu, setNu] = useState({ full_name: "", password: "", role: "user" as "user" | "admin", dept_keys: [] as string[], login_dept: "" });
 
   const SPECIAL = ["__admin__", "__user__"];
-  const specialLabel = (k: string) => k === "__admin__" ? "🛡️ Admin" : k === "__user__" ? "👤 User" : k;
+
 
   const toggle = (k: string) => {
     setNu((x) => {
