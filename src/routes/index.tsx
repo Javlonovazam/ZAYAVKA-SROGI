@@ -189,13 +189,8 @@ function DashboardPage() {
             )}
           </div>
         )}
-        {auth.isAdmin && delayed.length > 0 && (
-          <div className="bg-status-pending/10 border-t border-status-pending/30 px-4 md:px-6 py-2 text-sm flex items-center gap-2 text-status-pending">
-            <AlertTriangle className="h-4 w-4" />
-            <span><b>{delayed.length}</b> ta kechikkan zayavka • Jami jarima: <b>{formatMoney(totalPenalty)}</b></span>
-          </div>
-        )}
       </header>
+
 
       <main className="overflow-x-auto p-3 md:p-4">
         <div className="flex gap-3 min-w-max">
