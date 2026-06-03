@@ -466,8 +466,9 @@ export const createUserFn = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await assertGeneral(supabase, userId);
 
-    if (!data.dept_keys.includes(data.login_dept)) {
-      throw new Error("Login bo'limi tanlangan bo'limlar ichida bo'lishi kerak");
+    const SPECIAL = ["__admin__", "__user__", "__general__"];
+    if (!SPECIAL.includes(data.login_dept) && !data.dept_keys.includes(data.login_dept)) {
+      throw new Error("Login bo'limi tanlangan bo'limlar ichida yoki Admin/User bo'lishi kerak");
     }
 
     // Uniqueness (login_dept, password)
