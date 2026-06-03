@@ -52,7 +52,6 @@ export const loginByDeptPasswordFn = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    // Find credential row
     const { data: cred } = await supabaseAdmin
       .from("user_credentials")
       .select("user_id")
@@ -64,6 +63,16 @@ export const loginByDeptPasswordFn = createServerFn({ method: "POST" })
     const email = u.user?.email;
     if (!email) throw new Error("Hisob topilmadi");
     return { email };
+  });
+
+// ---------- List available login pozitsalar (public) ----------
+export const listLoginDeptsFn = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { data } = await supabaseAdmin
+      .from("user_credentials").select("login_dept");
+    const set = new Set<string>();
+    (data ?? []).forEach((r: any) => { if (r.login_dept) set.add(r.login_dept); });
+    return { keys: Array.from(set).sort() };
   });
 
 // ---------- Create order (admin) ----------
