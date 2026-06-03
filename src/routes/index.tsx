@@ -189,13 +189,8 @@ function DashboardPage() {
             )}
           </div>
         )}
-        {auth.isAdmin && delayed.length > 0 && (
-          <div className="bg-status-pending/10 border-t border-status-pending/30 px-4 md:px-6 py-2 text-sm flex items-center gap-2 text-status-pending">
-            <AlertTriangle className="h-4 w-4" />
-            <span><b>{delayed.length}</b> ta kechikkan zayavka • Jami jarima: <b>{formatMoney(totalPenalty)}</b></span>
-          </div>
-        )}
       </header>
+
 
       <main className="overflow-x-auto p-3 md:p-4">
         <div className="flex gap-3 min-w-max">
@@ -767,10 +762,14 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
 
   const [nu, setNu] = useState({ full_name: "", password: "", role: "user" as "user" | "admin", dept_keys: [] as string[], login_dept: "" });
 
+  const SPECIAL = ["__admin__", "__user__"];
+
+
   const toggle = (k: string) => {
     setNu((x) => {
       const arr = x.dept_keys.includes(k) ? x.dept_keys.filter((y) => y !== k) : [...x.dept_keys, k];
-      const ld = arr.includes(x.login_dept) ? x.login_dept : (arr[0] || "");
+      const ldOk = SPECIAL.includes(x.login_dept) || arr.includes(x.login_dept);
+      const ld = ldOk ? x.login_dept : (arr[0] || "__user__");
       return { ...x, dept_keys: arr, login_dept: ld };
     });
   };
@@ -786,12 +785,12 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
         <div>
           <Label className="text-xs">🎭 Rol</Label>
           <div className="flex gap-3 mt-1">
-            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "user"} onChange={() => setNu({ ...nu, role: "user" })} /> 👷 User</label>
-            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "admin"} onChange={() => setNu({ ...nu, role: "admin" })} /> 👑 Admin</label>
+            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "user"} onChange={() => setNu({ ...nu, role: "user", login_dept: nu.login_dept || "__user__" })} /> 👷 User</label>
+            <label className="flex items-center gap-2 text-sm"><input type="radio" checked={nu.role === "admin"} onChange={() => setNu({ ...nu, role: "admin", login_dept: nu.login_dept || "__admin__" })} /> 🛡️ Admin</label>
           </div>
         </div>
         <div>
-          <Label className="text-xs">☑️ Ruxsat berilgan bo'limlar</Label>
+          <Label className="text-xs">☑️ Ruxsat berilgan bo'limlar (qabul/topshirish)</Label>
           <div className="grid grid-cols-2 gap-1 mt-1 max-h-40 overflow-y-auto p-2 rounded-lg border border-border bg-card">
             {depts.map((d) => (
               <label key={d.key} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -801,29 +800,31 @@ function UsersEditor({ depts }: { depts: DeptRow[] }) {
             ))}
           </div>
         </div>
-        {nu.dept_keys.length > 0 && (
-          <div>
-            <Label className="text-xs">🚪 Login bo'limi (kirishda tanlanadi)</Label>
-            <Select value={nu.login_dept} onValueChange={(v) => setNu({ ...nu, login_dept: v })}>
-              <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
-              <SelectContent>
-                {nu.dept_keys.map((k) => {
-                  const d = depts.find((x) => x.key === k);
-                  return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div>
+          <Label className="text-xs">🚪 Login pozitsasi (kirishda tanlanadi)</Label>
+          <Select value={nu.login_dept} onValueChange={(v) => setNu({ ...nu, login_dept: v })}>
+            <SelectTrigger><SelectValue placeholder="Tanlang..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__admin__">🛡️ Admin</SelectItem>
+              <SelectItem value="__user__">👤 User</SelectItem>
+              {nu.dept_keys.map((k) => {
+                const d = depts.find((x) => x.key === k);
+                return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
+              })}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-1">Kirish oynasidagi “Pozitsa” ro'yxatida shu nom chiqadi</p>
+        </div>
         <Button className="w-full" disabled={!nu.full_name || !nu.password || nu.dept_keys.length === 0 || !nu.login_dept} onClick={async () => {
           try {
             await createFn({ data: nu });
             toast.success("✅ Yaratildi");
-            setNu({ full_name: "", password: "", role: "user", dept_keys: [], login_dept: "" });
+            setNu({ full_name: "", password: "", role: "user", dept_keys: [], login_dept: "__user__" });
             refetch();
           } catch (e: any) { toast.error(e.message); }
         }}>Yaratish</Button>
       </div>
+
 
       <div className="space-y-2 max-h-96 overflow-y-auto">
         <div className="font-semibold text-sm">📋 Mavjud foydalanuvchilar</div>
@@ -841,11 +842,14 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
     dept_keys: u.depts as string[], login_dept: u.login_dept as string,
   });
   const isGeneral = u.system_role === "general";
+  const SPECIAL = ["__admin__", "__user__"];
   const toggle = (k: string) => {
     const arr = e.dept_keys.includes(k) ? e.dept_keys.filter((y: string) => y !== k) : [...e.dept_keys, k];
-    const ld = arr.includes(e.login_dept) ? e.login_dept : (arr[0] || "");
+    const ldOk = SPECIAL.includes(e.login_dept) || arr.includes(e.login_dept);
+    const ld = ldOk ? e.login_dept : (arr[0] || "__user__");
     setE({ ...e, dept_keys: arr, login_dept: ld });
   };
+
 
   return (
     <details className="rounded-lg border border-border bg-card">
@@ -881,10 +885,12 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
               </div>
             </div>
             <div>
-              <Label className="text-xs">Login bo'limi</Label>
+              <Label className="text-xs">Login pozitsasi</Label>
               <Select value={e.login_dept} onValueChange={(v) => setE({ ...e, login_dept: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__admin__">🛡️ Admin</SelectItem>
+                  <SelectItem value="__user__">👤 User</SelectItem>
                   {e.dept_keys.map((k: string) => {
                     const d = depts.find((x: DeptRow) => x.key === k);
                     return <SelectItem key={k} value={k}>{d?.icon} {d?.label ?? k}</SelectItem>;
@@ -892,6 +898,7 @@ function UserRow({ u, depts, onChanged, updateFn, delFn }: any) {
                 </SelectContent>
               </Select>
             </div>
+
           </>
         )}
         <div className="flex gap-2 pt-2">

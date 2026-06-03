@@ -52,7 +52,6 @@ export const loginByDeptPasswordFn = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    // Find credential row
     const { data: cred } = await supabaseAdmin
       .from("user_credentials")
       .select("user_id")
@@ -64,6 +63,16 @@ export const loginByDeptPasswordFn = createServerFn({ method: "POST" })
     const email = u.user?.email;
     if (!email) throw new Error("Hisob topilmadi");
     return { email };
+  });
+
+// ---------- List available login pozitsalar (public) ----------
+export const listLoginDeptsFn = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { data } = await supabaseAdmin
+      .from("user_credentials").select("login_dept");
+    const set = new Set<string>();
+    (data ?? []).forEach((r: any) => { if (r.login_dept) set.add(r.login_dept); });
+    return { keys: Array.from(set).sort() };
   });
 
 // ---------- Create order (admin) ----------
@@ -457,8 +466,9 @@ export const createUserFn = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await assertGeneral(supabase, userId);
 
-    if (!data.dept_keys.includes(data.login_dept)) {
-      throw new Error("Login bo'limi tanlangan bo'limlar ichida bo'lishi kerak");
+    const SPECIAL = ["__admin__", "__user__", "__general__"];
+    if (!SPECIAL.includes(data.login_dept) && !data.dept_keys.includes(data.login_dept)) {
+      throw new Error("Login bo'limi tanlangan bo'limlar ichida yoki Admin/User bo'lishi kerak");
     }
 
     // Uniqueness (login_dept, password)
