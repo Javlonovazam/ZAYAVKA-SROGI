@@ -138,6 +138,7 @@ export const createOrderFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: order.id, user_id: userId, action: "created", to_department: first,
     });
+    await audit(userId, "orders", "created", order.id, null, order);
     return { order };
   });
 
@@ -159,6 +160,7 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "accepted",
       to_department: (order as any).current_department,
     });
+    await audit(userId, "orders", "accepted", data.orderId, null, { dept: (order as any).current_department });
     return { order };
   });
 
@@ -194,6 +196,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "delivered",
       from_department: curDept, to_department: next ?? curDept,
     });
+    await audit(userId, "orders", "delivered", data.orderId, { dept: curDept }, { dept: next ?? curDept });
     return { order };
   });
 
@@ -279,6 +282,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "moved",
       from_department: (cur as any)?.current_department, to_department: data.to,
     });
+    await audit(userId, "orders", "moved", data.orderId, { dept: (cur as any)?.current_department }, { dept: data.to });
     return { ok: true };
   });
 
@@ -303,6 +307,7 @@ export const updateDeadlineFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: data.orderId, user_id: userId, action: "deadline_changed", note: JSON.stringify(patch),
     });
+    await audit(userId, "orders", "deadline_changed", data.orderId, null, patch);
     return { ok: true };
   });
 
@@ -330,6 +335,7 @@ export const updateOrderFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: orderId, user_id: userId, action: "edited", note: JSON.stringify(patch),
     });
+    await audit(userId, "orders", "edited", orderId, null, patch);
     return { ok: true };
   });
 
@@ -342,8 +348,10 @@ export const deleteOrderFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
+    const { data: prev } = await supabaseAdmin.from("orders").select("*").eq("id", data.orderId).maybeSingle();
     const { error } = await supabaseAdmin.from("orders").delete().eq("id", data.orderId);
     if (error) throw new Error(error.message);
+    await audit(userId, "orders", "deleted", data.orderId, prev, null);
     return { ok: true };
   });
 
