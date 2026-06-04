@@ -9,6 +9,29 @@ async function getRole(supabase: any, userId: string): Promise<string | null> {
   return (data as any)?.system_role ?? null;
 }
 
+async function actorName(userId: string): Promise<string> {
+  const { data } = await supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+  return ((data as any)?.full_name as string) || "";
+}
+
+async function audit(
+  userId: string,
+  entity: string,
+  action: string,
+  entityId: string | null,
+  before: any = null,
+  after: any = null,
+  meta: any = null,
+) {
+  try {
+    const name = await actorName(userId);
+    await supabaseAdmin.from("audit_log").insert({
+      actor_id: userId, actor_name: name, entity, entity_id: entityId,
+      action, before, after, meta,
+    });
+  } catch (e) { /* never break business logic on audit failure */ }
+}
+
 async function assertAdmin(supabase: any, userId: string) {
   const r = await getRole(supabase, userId);
   if (r !== "admin" && r !== "general") throw new Error("Faqat admin/general bajara oladi");
@@ -115,6 +138,7 @@ export const createOrderFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: order.id, user_id: userId, action: "created", to_department: first,
     });
+    await audit(userId, "orders", "created", order.id, null, order);
     return { order };
   });
 
@@ -136,6 +160,7 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "accepted",
       to_department: (order as any).current_department,
     });
+    await audit(userId, "orders", "accepted", data.orderId, null, { dept: (order as any).current_department });
     return { order };
   });
 
@@ -171,6 +196,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "delivered",
       from_department: curDept, to_department: next ?? curDept,
     });
+    await audit(userId, "orders", "delivered", data.orderId, { dept: curDept }, { dept: next ?? curDept });
     return { order };
   });
 
@@ -225,6 +251,7 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
     ], { onConflict: "key" });
     const { error } = await supabaseAdmin.rpc("reschedule_telegram_cron", { hour_utc: data.telegram_hour_utc });
     if (error) throw new Error("Cron yangilab bo'lmadi: " + error.message);
+    await audit(userId, "settings", "updated", null, null, data);
     return { ok: true };
   });
 
@@ -256,6 +283,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       order_id: data.orderId, user_id: userId, action: "moved",
       from_department: (cur as any)?.current_department, to_department: data.to,
     });
+    await audit(userId, "orders", "moved", data.orderId, { dept: (cur as any)?.current_department }, { dept: data.to });
     return { ok: true };
   });
 
@@ -280,6 +308,7 @@ export const updateDeadlineFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: data.orderId, user_id: userId, action: "deadline_changed", note: JSON.stringify(patch),
     });
+    await audit(userId, "orders", "deadline_changed", data.orderId, null, patch);
     return { ok: true };
   });
 
@@ -307,6 +336,7 @@ export const updateOrderFn = createServerFn({ method: "POST" })
     await supabaseAdmin.from("order_history").insert({
       order_id: orderId, user_id: userId, action: "edited", note: JSON.stringify(patch),
     });
+    await audit(userId, "orders", "edited", orderId, null, patch);
     return { ok: true };
   });
 
@@ -319,8 +349,10 @@ export const deleteOrderFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
+    const { data: prev } = await supabaseAdmin.from("orders").select("*").eq("id", data.orderId).maybeSingle();
     const { error } = await supabaseAdmin.from("orders").delete().eq("id", data.orderId);
     if (error) throw new Error(error.message);
+    await audit(userId, "orders", "deleted", data.orderId, prev, null);
     return { ok: true };
   });
 
@@ -378,6 +410,7 @@ export const createDepartmentFn = createServerFn({ method: "POST" })
       key: data.key, label: data.label, icon: data.icon, sort_order: sort, active: true,
     });
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "created", data.key, null, data);
     return { ok: true };
   });
 
@@ -397,6 +430,7 @@ export const updateDepartmentFn = createServerFn({ method: "POST" })
     const { key, ...patch } = data;
     const { error } = await supabaseAdmin.from("departments").update(patch).eq("key", key);
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "updated", key, null, patch);
     return { ok: true };
   });
 
@@ -416,6 +450,7 @@ export const deleteDepartmentFn = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin.from("departments").delete().eq("key", data.key);
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "deleted", data.key, null, null);
     return { ok: true };
   });
 
@@ -499,6 +534,7 @@ export const createUserFn = createServerFn({ method: "POST" })
       user_id: newId, login_dept: data.login_dept, password_plain: data.password,
     });
 
+    await audit(userId, "users", "created", newId, null, { full_name: data.full_name, role: data.role, depts: data.dept_keys, login_dept: data.login_dept });
     return { ok: true, userId: newId };
   });
 
@@ -558,6 +594,7 @@ export const updateUserFn = createServerFn({ method: "POST" })
       }
     }
 
+    await audit(userId, "users", "updated", data.userId, null, { ...data, password: data.password ? "***" : undefined });
     return { ok: true };
   });
 
@@ -572,5 +609,44 @@ export const deleteUserFn = createServerFn({ method: "POST" })
     if (data.userId === userId) throw new Error("O'zingizni o'chira olmaysiz");
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw new Error(error.message);
+    await audit(userId, "users", "deleted", data.userId, null, null);
     return { ok: true };
+  });
+
+// ---------- Reorder departments (general only) ----------
+export const reorderDepartmentsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ keys: z.array(z.string().min(1).max(64)).min(1).max(100) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertGeneral(supabase, userId);
+    // assign sort_order 10, 20, 30... so future inserts can fit between
+    for (let i = 0; i < data.keys.length; i++) {
+      const { error } = await supabaseAdmin
+        .from("departments").update({ sort_order: (i + 1) * 10 }).eq("key", data.keys[i]);
+      if (error) throw new Error(error.message);
+    }
+    await audit(userId, "departments", "reordered", null, null, { order: data.keys });
+    return { ok: true };
+  });
+
+// ---------- Audit log list (general only) ----------
+export const listAuditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      limit: z.number().int().min(1).max(500).default(100),
+      entity: z.string().max(64).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertGeneral(supabase, userId);
+    let q = supabaseAdmin.from("audit_log").select("*").order("created_at", { ascending: false }).limit(data.limit);
+    if (data.entity) q = q.eq("entity", data.entity);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return { items: rows ?? [] };
   });

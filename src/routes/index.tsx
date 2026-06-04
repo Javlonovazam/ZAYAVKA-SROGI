@@ -12,9 +12,10 @@ import {
   acceptOrderFn, deliverOrderFn, createOrderFn, updateDeadlineFn,
   moveOrderFn, deleteOrderFn, updateOrderFn,
   getOrderHistoryFn, getSettingsFn, updateSettingsFn,
-  createDepartmentFn, deleteDepartmentFn,
+  createDepartmentFn, deleteDepartmentFn, reorderDepartmentsFn, listAuditFn,
   createUserFn, updateUserFn, deleteUserFn, listUsersFn,
 } from "@/lib/orders.functions";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock, Trash2 } from "lucide-react";
+import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock, Trash2, ArrowUp, ArrowDown, Sun, Moon } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -146,7 +147,7 @@ function DashboardPage() {
   if (!auth.user) return null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_oklch(0.97_0.04_265)_0%,_oklch(0.985_0.005_240)_45%,_oklch(0.95_0.03_180)_100%)]">
+    <div className="min-h-screen bg-background bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklab,var(--primary)_10%,transparent)_0%,transparent_55%)]">
       <header className="border-b border-border bg-card sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="px-4 md:px-6 py-3 flex items-center gap-3 flex-wrap">
           <h1 className="text-lg md:text-xl font-bold tracking-tight">🏭 Ishlab chiqarish CRM</h1>
@@ -158,6 +159,7 @@ function DashboardPage() {
             {auth.isAdmin && <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>}
             {auth.isAdmin && <NewOrderDialog depts={deptList} />}
             {auth.isGeneral && <SettingsDialog depts={deptList} />}
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/login" }); }}>
               <LogOut className="h-4 w-4" />
             </Button>
@@ -669,12 +671,13 @@ function SettingsDialog({ depts }: { depts: DeptRow[] }) {
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>⚙️ Tizim sozlamalari</DialogTitle></DialogHeader>
         <Tabs defaultValue="general">
-          <TabsList className="grid grid-cols-5 w-full">
+          <TabsList className="grid grid-cols-6 w-full">
             <TabsTrigger value="general">⚙️ Umumiy</TabsTrigger>
             <TabsTrigger value="depts">🗂️ Bo'limlar</TabsTrigger>
             <TabsTrigger value="users">👥 Foydalanuvchilar</TabsTrigger>
             <TabsTrigger value="filials">🏢 Filiallar</TabsTrigger>
             <TabsTrigger value="products">🪵 Mahsulotlar</TabsTrigger>
+            <TabsTrigger value="audit">📜 Audit</TabsTrigger>
           </TabsList>
           <TabsContent value="general" className="space-y-4 pt-4">
             <div>
@@ -710,6 +713,9 @@ function SettingsDialog({ depts }: { depts: DeptRow[] }) {
           <TabsContent value="products" className="pt-4">
             <CatalogEditor catalogKey="product_types" title="Mahsulot turi" icon="🪵" />
           </TabsContent>
+          <TabsContent value="audit" className="pt-4">
+            <AuditViewer />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
@@ -720,34 +726,148 @@ function DepartmentsEditor({ depts }: { depts: DeptRow[] }) {
   const qc = useQueryClient();
   const createDept = useServerFn(createDepartmentFn);
   const delDept = useServerFn(deleteDepartmentFn);
-  const [n, setN] = useState({ key: "", label: "", icon: "📋" });
+  const reorder = useServerFn(reorderDepartmentsFn);
+  const [n, setN] = useState({ key: "", label: "", icon: "📋", insertAfter: "__end__" });
+  const [order, setOrder] = useState<string[]>([]);
+
+  useEffect(() => { setOrder(depts.map((d) => d.key)); }, [depts]);
+
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrder(next);
+  };
+
+  const dirty = order.join(",") !== depts.map((d) => d.key).join(",");
+
+  const handleCreate = async () => {
+    try {
+      await createDept({ data: { key: n.key, label: n.label, icon: n.icon } });
+      // If user picked a position other than end, build new order and reorder
+      if (n.insertAfter !== "__end__") {
+        const cur = depts.map((d) => d.key);
+        const idx = n.insertAfter === "__start__" ? 0 : cur.indexOf(n.insertAfter) + 1;
+        const next = [...cur.slice(0, idx), n.key, ...cur.slice(idx)];
+        await reorder({ data: { keys: next } });
+      }
+      toast.success("Bo'lim qo'shildi");
+      setN({ key: "", label: "", icon: "📋", insertAfter: "__end__" });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const saveOrder = async () => {
+    try {
+      await reorder({ data: { keys: order } });
+      toast.success("Tartib saqlandi");
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  // map for icon/label lookup
+  const byKey: Record<string, DeptRow> = Object.fromEntries(depts.map((d) => [d.key, d]));
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-4 gap-2">
-        <Input placeholder="key (kraska2)" value={n.key} onChange={(e) => setN({ ...n, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} />
-        <Input placeholder="Nomi" value={n.label} onChange={(e) => setN({ ...n, label: e.target.value })} />
-        <Input placeholder="🎨" value={n.icon} onChange={(e) => setN({ ...n, icon: e.target.value })} />
-        <Button onClick={async () => {
-          try {
-            await createDept({ data: n });
-            toast.success("Bo'lim qo'shildi");
-            setN({ key: "", label: "", icon: "📋" });
-            qc.invalidateQueries({ queryKey: ["departments"] });
-          } catch (e: any) { toast.error(e.message); }
-        }} disabled={!n.key || !n.label}><Plus className="h-4 w-4 mr-1" />Qo'shish</Button>
+      <div className="rounded-lg border border-border p-3 bg-card space-y-2">
+        <div className="text-xs font-semibold text-muted-foreground">➕ Yangi bo'lim</div>
+        <div className="grid grid-cols-4 gap-2">
+          <Input placeholder="key (kraska2)" value={n.key} onChange={(e) => setN({ ...n, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} />
+          <Input placeholder="Nomi" value={n.label} onChange={(e) => setN({ ...n, label: e.target.value })} />
+          <Input placeholder="🎨" value={n.icon} onChange={(e) => setN({ ...n, icon: e.target.value })} />
+          <Button onClick={handleCreate} disabled={!n.key || !n.label}><Plus className="h-4 w-4 mr-1" />Qo'shish</Button>
+        </div>
+        <div>
+          <Label className="text-xs">📍 Joylashtirish</Label>
+          <Select value={n.insertAfter} onValueChange={(v) => setN({ ...n, insertAfter: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__start__">⬆️ Eng boshiga</SelectItem>
+              {depts.map((d) => (
+                <SelectItem key={d.key} value={d.key}>{d.icon} {d.label} dan keyin</SelectItem>
+              ))}
+              <SelectItem value="__end__">⬇️ Eng oxiriga</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-      <div className="space-y-1 max-h-72 overflow-y-auto">
-        {depts.map((d) => (
-          <div key={d.key} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-card border border-border">
-            <span className="text-sm">{d.icon} <b>{d.label}</b> <span className="text-xs text-muted-foreground">({d.key})</span></span>
-            <Button size="sm" variant="ghost" className="h-7 text-status-pending hover:bg-status-pending/10" onClick={async () => {
-              if (!confirm(`"${d.label}" o'chirilsinmi?`)) return;
-              try { await delDept({ data: { key: d.key } }); toast.success("O'chirildi"); qc.invalidateQueries({ queryKey: ["departments"] }); }
-              catch (e: any) { toast.error(e.message); }
-            }}><Trash2 className="h-3.5 w-3.5" /></Button>
+
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold text-muted-foreground">📋 Mavjud bo'limlar (yuqori/past tugmalar bilan ko'chiring)</div>
+        {dirty && <Button size="sm" onClick={saveOrder}>💾 Tartibni saqlash</Button>}
+      </div>
+      <div className="space-y-1 max-h-80 overflow-y-auto">
+        {order.map((k, i) => {
+          const d = byKey[k]; if (!d) return null;
+          return (
+            <div key={k} className="flex items-center gap-2 p-2 rounded-lg bg-card border border-border">
+              <span className="text-xs font-mono text-muted-foreground w-6">{i + 1}.</span>
+              <span className="flex-1 text-sm">{d.icon} <b>{d.label}</b> <span className="text-xs text-muted-foreground">({d.key})</span></span>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" disabled={i === order.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant="ghost" className="h-7 text-status-pending hover:bg-status-pending/10" onClick={async () => {
+                if (!confirm(`"${d.label}" o'chirilsinmi?`)) return;
+                try { await delDept({ data: { key: d.key } }); toast.success("O'chirildi"); qc.invalidateQueries({ queryKey: ["departments"] }); }
+                catch (e: any) { toast.error(e.message); }
+              }}><Trash2 className="h-3.5 w-3.5" /></Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <Button variant="ghost" size="sm" onClick={toggle} title={theme === "dark" ? "Kunduzgi" : "Tungi"}>
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </Button>
+  );
+}
+
+function AuditViewer() {
+  const fn = useServerFn(listAuditFn);
+  const [entity, setEntity] = useState<string>("all");
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["audit", entity],
+    queryFn: () => fn({ data: { limit: 200, entity: entity === "all" ? undefined : entity } }),
+  });
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Select value={entity} onValueChange={setEntity}>
+          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Hammasi</SelectItem>
+            <SelectItem value="orders">📋 Zayavkalar</SelectItem>
+            <SelectItem value="departments">🗂️ Bo'limlar</SelectItem>
+            <SelectItem value="users">👥 Foydalanuvchilar</SelectItem>
+            <SelectItem value="settings">⚙️ Sozlamalar</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>🔄 Yangilash</Button>
+        <span className="text-xs text-muted-foreground ml-auto">Oxirgi 200 yozuv</span>
+      </div>
+      <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+        {(data?.items ?? []).map((r: any) => (
+          <div key={r.id} className="text-xs p-2 rounded-md border border-border bg-card">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-muted-foreground">{new Date(r.created_at).toLocaleString("uz-UZ")}</span>
+              <span className="px-1.5 py-0.5 rounded bg-secondary font-semibold">{r.entity}</span>
+              <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary font-semibold">{r.action}</span>
+              {r.actor_name && <span>👤 {r.actor_name}</span>}
+              {r.entity_id && <span className="font-mono text-muted-foreground">#{String(r.entity_id).slice(0, 8)}</span>}
+            </div>
+            {(r.after || r.before) && (
+              <pre className="mt-1 text-[10px] text-muted-foreground whitespace-pre-wrap break-all">{JSON.stringify(r.after ?? r.before, null, 0).slice(0, 240)}</pre>
+            )}
           </div>
         ))}
+        {(!data || data.items.length === 0) && <div className="text-sm text-muted-foreground p-3">Hech narsa topilmadi</div>}
       </div>
     </div>
   );
