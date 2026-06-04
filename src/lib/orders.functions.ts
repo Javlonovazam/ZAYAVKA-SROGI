@@ -9,6 +9,29 @@ async function getRole(supabase: any, userId: string): Promise<string | null> {
   return (data as any)?.system_role ?? null;
 }
 
+async function actorName(userId: string): Promise<string> {
+  const { data } = await supabaseAdmin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+  return ((data as any)?.full_name as string) || "";
+}
+
+async function audit(
+  userId: string,
+  entity: string,
+  action: string,
+  entityId: string | null,
+  before: any = null,
+  after: any = null,
+  meta: any = null,
+) {
+  try {
+    const name = await actorName(userId);
+    await supabaseAdmin.from("audit_log").insert({
+      actor_id: userId, actor_name: name, entity, entity_id: entityId,
+      action, before, after, meta,
+    });
+  } catch (e) { /* never break business logic on audit failure */ }
+}
+
 async function assertAdmin(supabase: any, userId: string) {
   const r = await getRole(supabase, userId);
   if (r !== "admin" && r !== "general") throw new Error("Faqat admin/general bajara oladi");
