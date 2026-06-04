@@ -251,6 +251,7 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
     ], { onConflict: "key" });
     const { error } = await supabaseAdmin.rpc("reschedule_telegram_cron", { hour_utc: data.telegram_hour_utc });
     if (error) throw new Error("Cron yangilab bo'lmadi: " + error.message);
+    await audit(userId, "settings", "updated", null, null, data);
     return { ok: true };
   });
 
@@ -409,6 +410,7 @@ export const createDepartmentFn = createServerFn({ method: "POST" })
       key: data.key, label: data.label, icon: data.icon, sort_order: sort, active: true,
     });
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "created", data.key, null, data);
     return { ok: true };
   });
 
@@ -428,6 +430,7 @@ export const updateDepartmentFn = createServerFn({ method: "POST" })
     const { key, ...patch } = data;
     const { error } = await supabaseAdmin.from("departments").update(patch).eq("key", key);
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "updated", key, null, patch);
     return { ok: true };
   });
 
@@ -447,6 +450,7 @@ export const deleteDepartmentFn = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin.from("departments").delete().eq("key", data.key);
     if (error) throw new Error(error.message);
+    await audit(userId, "departments", "deleted", data.key, null, null);
     return { ok: true };
   });
 
@@ -530,6 +534,7 @@ export const createUserFn = createServerFn({ method: "POST" })
       user_id: newId, login_dept: data.login_dept, password_plain: data.password,
     });
 
+    await audit(userId, "users", "created", newId, null, { full_name: data.full_name, role: data.role, depts: data.dept_keys, login_dept: data.login_dept });
     return { ok: true, userId: newId };
   });
 
@@ -589,6 +594,7 @@ export const updateUserFn = createServerFn({ method: "POST" })
       }
     }
 
+    await audit(userId, "users", "updated", data.userId, null, { ...data, password: data.password ? "***" : undefined });
     return { ok: true };
   });
 
@@ -603,6 +609,7 @@ export const deleteUserFn = createServerFn({ method: "POST" })
     if (data.userId === userId) throw new Error("O'zingizni o'chira olmaysiz");
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw new Error(error.message);
+    await audit(userId, "users", "deleted", data.userId, null, null);
     return { ok: true };
   });
 
