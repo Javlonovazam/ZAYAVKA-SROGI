@@ -597,3 +597,41 @@ export const deleteUserFn = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------- Reorder departments (general only) ----------
+export const reorderDepartmentsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ keys: z.array(z.string().min(1).max(64)).min(1).max(100) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertGeneral(supabase, userId);
+    // assign sort_order 10, 20, 30... so future inserts can fit between
+    for (let i = 0; i < data.keys.length; i++) {
+      const { error } = await supabaseAdmin
+        .from("departments").update({ sort_order: (i + 1) * 10 }).eq("key", data.keys[i]);
+      if (error) throw new Error(error.message);
+    }
+    await audit(userId, "departments", "reordered", null, null, { order: data.keys });
+    return { ok: true };
+  });
+
+// ---------- Audit log list (general only) ----------
+export const listAuditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      limit: z.number().int().min(1).max(500).default(100),
+      entity: z.string().max(64).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await assertGeneral(supabase, userId);
+    let q = supabaseAdmin.from("audit_log").select("*").order("created_at", { ascending: false }).limit(data.limit);
+    if (data.entity) q = q.eq("entity", data.entity);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return { items: rows ?? [] };
+  });
