@@ -12,9 +12,10 @@ import {
   acceptOrderFn, deliverOrderFn, createOrderFn, updateDeadlineFn,
   moveOrderFn, deleteOrderFn, updateOrderFn,
   getOrderHistoryFn, getSettingsFn, updateSettingsFn,
-  createDepartmentFn, deleteDepartmentFn,
+  createDepartmentFn, deleteDepartmentFn, reorderDepartmentsFn, listAuditFn,
   createUserFn, updateUserFn, deleteUserFn, listUsersFn,
 } from "@/lib/orders.functions";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
