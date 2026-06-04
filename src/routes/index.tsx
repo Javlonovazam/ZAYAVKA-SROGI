@@ -159,6 +159,7 @@ function DashboardPage() {
             {auth.isAdmin && <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>}
             {auth.isAdmin && <NewOrderDialog depts={deptList} />}
             {auth.isGeneral && <SettingsDialog depts={deptList} />}
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/login" }); }}>
               <LogOut className="h-4 w-4" />
             </Button>
