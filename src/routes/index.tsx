@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock, Trash2 } from "lucide-react";
+import { LogOut, Plus, Settings, AlertTriangle, Search, BarChart3, Cog, CheckCircle2, ArrowRight, Clock, Trash2, ArrowUp, ArrowDown, Sun, Moon } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
