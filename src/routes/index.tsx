@@ -713,6 +713,9 @@ function SettingsDialog({ depts }: { depts: DeptRow[] }) {
           <TabsContent value="products" className="pt-4">
             <CatalogEditor catalogKey="product_types" title="Mahsulot turi" icon="🪵" />
           </TabsContent>
+          <TabsContent value="audit" className="pt-4">
+            <AuditViewer />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
