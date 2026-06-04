@@ -671,12 +671,13 @@ function SettingsDialog({ depts }: { depts: DeptRow[] }) {
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>⚙️ Tizim sozlamalari</DialogTitle></DialogHeader>
         <Tabs defaultValue="general">
-          <TabsList className="grid grid-cols-5 w-full">
+          <TabsList className="grid grid-cols-6 w-full">
             <TabsTrigger value="general">⚙️ Umumiy</TabsTrigger>
             <TabsTrigger value="depts">🗂️ Bo'limlar</TabsTrigger>
             <TabsTrigger value="users">👥 Foydalanuvchilar</TabsTrigger>
             <TabsTrigger value="filials">🏢 Filiallar</TabsTrigger>
             <TabsTrigger value="products">🪵 Mahsulotlar</TabsTrigger>
+            <TabsTrigger value="audit">📜 Audit</TabsTrigger>
           </TabsList>
           <TabsContent value="general" className="space-y-4 pt-4">
             <div>
