@@ -150,14 +150,24 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
     z.object({ orderId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: order, error } = await supabase
+    const { userId } = context;
+    const { data: pre } = await supabaseAdmin.from("orders")
+      .select("current_department").eq("id", data.orderId).single();
+    const curDept = (pre as any)?.current_department as string;
+    const role = await getRole(null, userId);
+    const isAdmin = role === "admin" || role === "general";
+    if (!isAdmin) {
+      const { data: ud } = await supabaseAdmin.from("user_departments")
+        .select("id").eq("user_id", userId).eq("department_key", curDept).maybeSingle();
+      if (!ud) throw new Error("Bu bo'limga ruxsat yo'q");
+    }
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .update({ status: "in_progress", previous_department: null, entered_current_dept_at: new Date().toISOString() })
       .eq("id", data.orderId).eq("status", "pending_accept")
       .select().single();
     if (error) throw new Error(error.message);
-    await supabase.from("order_history").insert({
+    await supabaseAdmin.from("order_history").insert({
       order_id: data.orderId, user_id: userId, action: "accepted",
       to_department: (order as any).current_department,
     });
@@ -172,16 +182,24 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
     z.object({ orderId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: cur, error: e1 } = await supabase
+    const { userId } = context;
+    const { data: cur, error: e1 } = await supabaseAdmin
       .from("orders").select("current_department")
       .eq("id", data.orderId).single();
     if (e1) throw new Error(e1.message);
     const curDept = (cur as any).current_department as string;
+    // permission: admin/general OR user assigned to current dept
+    const role = await getRole(null, userId);
+    const isAdmin = role === "admin" || role === "general";
+    if (!isAdmin) {
+      const { data: ud } = await supabaseAdmin.from("user_departments")
+        .select("id").eq("user_id", userId).eq("department_key", curDept).maybeSingle();
+      if (!ud) throw new Error("Bu bo'limga ruxsat yo'q");
+    }
     const next = await nextDeptKey(curDept);
     const isLast = next === null;
 
-    const { data: order, error } = await supabase
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .update({
         current_department: next ?? curDept,
@@ -193,7 +211,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       .eq("id", data.orderId).select().single();
     if (error) throw new Error(error.message);
 
-    await supabase.from("order_history").insert({
+    await supabaseAdmin.from("order_history").insert({
       order_id: data.orderId, user_id: userId, action: "delivered",
       from_department: curDept, to_department: next ?? curDept,
     });
