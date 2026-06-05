@@ -42,8 +42,9 @@ function LoginPage() {
     if (!dept || !password) return;
     setLoading(true);
     try {
-      const { email } = await lookup({ data: { dept, password } });
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const res = await lookup({ data: { dept, password } });
+      if (!res.email) throw new Error(res.error || "Pozitsa yoki parol noto'g'ri");
+      const { error } = await supabase.auth.signInWithPassword({ email: res.email, password });
       if (error) throw error;
       toast.success("✅ Tizimga kirildi");
       window.location.href = "/";
