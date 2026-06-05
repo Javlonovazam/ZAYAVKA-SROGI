@@ -4,8 +4,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // ---------- helpers ----------
-async function getRole(supabase: any, userId: string): Promise<string | null> {
-  const { data } = await supabase.from("profiles").select("system_role").eq("id", userId).maybeSingle();
+async function getRole(_supabase: any, userId: string): Promise<string | null> {
+  // system_role column is not readable by clients (RLS/grants). Use admin client.
+  const { data } = await supabaseAdmin.from("profiles").select("system_role").eq("id", userId).maybeSingle();
   return (data as any)?.system_role ?? null;
 }
 
