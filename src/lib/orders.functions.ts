@@ -82,11 +82,11 @@ export const loginByDeptPasswordFn = createServerFn({ method: "POST" })
       .eq("login_dept", data.dept)
       .eq("password_plain", data.password)
       .maybeSingle();
-    if (!cred) throw new Error("Pozitsa yoki parol noto'g'ri");
+    if (!cred) return { email: null as string | null, error: "Pozitsa yoki parol noto'g'ri" };
     const { data: u } = await supabaseAdmin.auth.admin.getUserById((cred as any).user_id);
-    const email = u.user?.email;
-    if (!email) throw new Error("Hisob topilmadi");
-    return { email };
+    const email = u.user?.email ?? null;
+    if (!email) return { email: null, error: "Hisob topilmadi" };
+    return { email, error: null as string | null };
   });
 
 // ---------- List available login pozitsalar (public) ----------
