@@ -39,10 +39,10 @@ export function useAuth(): AuthState {
     }
     const uid = session.user.id;
     Promise.all([
-      supabase.from("profiles").select("system_role").eq("id", uid).maybeSingle(),
+      supabase.rpc("get_my_role"),
       supabase.from("user_departments").select("department_key").eq("user_id", uid),
     ]).then(([p, d]) => {
-      setSystemRole(((p.data as any)?.system_role as SystemRole) ?? "user");
+      setSystemRole(((p.data as any) as SystemRole) ?? "user");
       setDepts(((d.data ?? []) as any[]).map((x) => x.department_key));
     });
   }, [session?.user?.id]);

@@ -293,6 +293,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_role: { Args: never; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_general: { Args: { _uid: string }; Returns: boolean }
       reschedule_telegram_cron: {
