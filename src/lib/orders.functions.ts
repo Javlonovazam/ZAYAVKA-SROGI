@@ -150,14 +150,24 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
     z.object({ orderId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: order, error } = await supabase
+    const { userId } = context;
+    const { data: pre } = await supabaseAdmin.from("orders")
+      .select("current_department").eq("id", data.orderId).single();
+    const curDept = (pre as any)?.current_department as string;
+    const role = await getRole(null, userId);
+    const isAdmin = role === "admin" || role === "general";
+    if (!isAdmin) {
+      const { data: ud } = await supabaseAdmin.from("user_departments")
+        .select("id").eq("user_id", userId).eq("department_key", curDept).maybeSingle();
+      if (!ud) throw new Error("Bu bo'limga ruxsat yo'q");
+    }
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .update({ status: "in_progress", previous_department: null, entered_current_dept_at: new Date().toISOString() })
       .eq("id", data.orderId).eq("status", "pending_accept")
       .select().single();
     if (error) throw new Error(error.message);
-    await supabase.from("order_history").insert({
+    await supabaseAdmin.from("order_history").insert({
       order_id: data.orderId, user_id: userId, action: "accepted",
       to_department: (order as any).current_department,
     });
