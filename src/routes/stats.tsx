@@ -68,6 +68,8 @@ function StatsPage() {
       return (data || []) as any[];
     },
     enabled: !!auth.user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: history = [] } = useQuery({
