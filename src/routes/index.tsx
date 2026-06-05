@@ -94,23 +94,25 @@ function DashboardPage() {
       return data as Order[];
     },
     enabled: !!auth.user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
     if (!auth.user) return;
+    let t: any;
     const ch = supabase
       .channel("orders-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-        qc.invalidateQueries({ queryKey: ["orders"] });
+        clearTimeout(t);
+        t = setTimeout(() => qc.invalidateQueries({ queryKey: ["orders"] }), 400);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { clearTimeout(t); supabase.removeChannel(ch); };
   }, [auth.user, qc]);
 
-  const visibleDepts = useMemo(() => {
-    if (auth.isAdmin) return deptList;
-    return deptList.filter((d) => auth.depts.includes(d.key));
-  }, [deptList, auth.isAdmin, auth.depts]);
+  // Hammasi ko'rinadi — amal faqat ruxsat berilgan bo'limlarda (canActOnDept orqali)
+  const visibleDepts = deptList;
 
   const filtered = orders.filter((o) => {
     if (search) {
@@ -156,7 +158,7 @@ function DashboardPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Qidirish..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-48 md:w-64" />
             </div>
-            {auth.isAdmin && <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>}
+            <Link to="/stats"><Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Statistika</Button></Link>
             {auth.isAdmin && <NewOrderDialog depts={deptList} />}
             {auth.isGeneral && <SettingsDialog depts={deptList} />}
             <ThemeToggle />

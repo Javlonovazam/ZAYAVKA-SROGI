@@ -47,8 +47,8 @@ function StatsPage() {
   const [openDeptKey, setOpenDeptKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth.loading && (!auth.user || !auth.isAdmin)) navigate({ to: "/" });
-  }, [auth.loading, auth.user, auth.isAdmin, navigate]);
+    if (!auth.loading && !auth.user) navigate({ to: "/login" });
+  }, [auth.loading, auth.user, navigate]);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings"],
@@ -68,6 +68,8 @@ function StatsPage() {
       return (data || []) as any[];
     },
     enabled: !!auth.user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: history = [] } = useQuery({
@@ -207,7 +209,7 @@ function StatsPage() {
           <TabsList className="flex-wrap">
             <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
             <TabsTrigger value="charts">📈 Grafiklar</TabsTrigger>
-            <TabsTrigger value="ai">🤖 AI tahlil</TabsTrigger>
+            {auth.isAdmin && <TabsTrigger value="ai">🤖 AI tahlil</TabsTrigger>}
             <TabsTrigger value="history">🕘 Tarix ({filteredHistory.length})</TabsTrigger>
           </TabsList>
 
