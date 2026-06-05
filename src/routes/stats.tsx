@@ -47,8 +47,8 @@ function StatsPage() {
   const [openDeptKey, setOpenDeptKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth.loading && (!auth.user || !auth.isAdmin)) navigate({ to: "/" });
-  }, [auth.loading, auth.user, auth.isAdmin, navigate]);
+    if (!auth.loading && !auth.user) navigate({ to: "/login" });
+  }, [auth.loading, auth.user, navigate]);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings"],
