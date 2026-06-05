@@ -209,7 +209,7 @@ function StatsPage() {
           <TabsList className="flex-wrap">
             <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
             <TabsTrigger value="charts">📈 Grafiklar</TabsTrigger>
-            <TabsTrigger value="ai">🤖 AI tahlil</TabsTrigger>
+            {auth.isAdmin && <TabsTrigger value="ai">🤖 AI tahlil</TabsTrigger>}
             <TabsTrigger value="history">🕘 Tarix ({filteredHistory.length})</TabsTrigger>
           </TabsList>
 
