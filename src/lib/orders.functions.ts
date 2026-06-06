@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { appendOrderBackup } from "@/lib/gsheets-backup.server";
 
 // ---------- helpers ----------
 async function getRole(_supabase: any, userId: string): Promise<string | null> {
