@@ -141,6 +141,7 @@ export const createOrderFn = createServerFn({ method: "POST" })
       order_id: order.id, user_id: userId, action: "created", to_department: first,
     });
     await audit(userId, "orders", "created", order.id, null, order);
+    await appendOrderBackup({ order, userId, action: "created" });
     return { order };
   });
 
