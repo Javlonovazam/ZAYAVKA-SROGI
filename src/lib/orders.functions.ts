@@ -291,7 +291,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       .from("orders").select("current_department").eq("id", data.orderId).single();
     const last = await lastDeptKey();
 
-    const { error } = await supabaseAdmin
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .update({
         current_department: data.to,
@@ -299,7 +299,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
         entered_current_dept_at: new Date().toISOString(),
         finished_at: data.to === last ? new Date().toISOString() : null,
       })
-      .eq("id", data.orderId);
+      .eq("id", data.orderId).select().single();
     if (error) throw new Error(error.message);
 
     await supabaseAdmin.from("order_history").insert({
@@ -307,6 +307,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       from_department: (cur as any)?.current_department, to_department: data.to,
     });
     await audit(userId, "orders", "moved", data.orderId, { dept: (cur as any)?.current_department }, { dept: data.to });
+    await appendOrderBackup({ order, userId, action: "moved" });
     return { ok: true };
   });
 
