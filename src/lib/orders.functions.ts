@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { appendOrderBackup } from "@/lib/gsheets-backup.server";
 
 // ---------- helpers ----------
 async function getRole(_supabase: any, userId: string): Promise<string | null> {
@@ -140,6 +141,7 @@ export const createOrderFn = createServerFn({ method: "POST" })
       order_id: order.id, user_id: userId, action: "created", to_department: first,
     });
     await audit(userId, "orders", "created", order.id, null, order);
+    await appendOrderBackup({ order, userId, action: "created" });
     return { order };
   });
 
@@ -172,6 +174,7 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
       to_department: (order as any).current_department,
     });
     await audit(userId, "orders", "accepted", data.orderId, null, { dept: (order as any).current_department });
+    await appendOrderBackup({ order, userId, action: "accepted" });
     return { order };
   });
 
@@ -216,6 +219,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       from_department: curDept, to_department: next ?? curDept,
     });
     await audit(userId, "orders", "delivered", data.orderId, { dept: curDept }, { dept: next ?? curDept });
+    await appendOrderBackup({ order, userId, action: "delivered" });
     return { order };
   });
 
@@ -287,7 +291,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       .from("orders").select("current_department").eq("id", data.orderId).single();
     const last = await lastDeptKey();
 
-    const { error } = await supabaseAdmin
+    const { data: order, error } = await supabaseAdmin
       .from("orders")
       .update({
         current_department: data.to,
@@ -295,7 +299,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
         entered_current_dept_at: new Date().toISOString(),
         finished_at: data.to === last ? new Date().toISOString() : null,
       })
-      .eq("id", data.orderId);
+      .eq("id", data.orderId).select().single();
     if (error) throw new Error(error.message);
 
     await supabaseAdmin.from("order_history").insert({
@@ -303,6 +307,7 @@ export const moveOrderFn = createServerFn({ method: "POST" })
       from_department: (cur as any)?.current_department, to_department: data.to,
     });
     await audit(userId, "orders", "moved", data.orderId, { dept: (cur as any)?.current_department }, { dept: data.to });
+    await appendOrderBackup({ order, userId, action: "moved" });
     return { ok: true };
   });
 
