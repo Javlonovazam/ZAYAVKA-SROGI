@@ -174,6 +174,7 @@ export const acceptOrderFn = createServerFn({ method: "POST" })
       to_department: (order as any).current_department,
     });
     await audit(userId, "orders", "accepted", data.orderId, null, { dept: (order as any).current_department });
+    await appendOrderBackup({ order, userId, action: "accepted" });
     return { order };
   });
 
