@@ -219,6 +219,7 @@ export const deliverOrderFn = createServerFn({ method: "POST" })
       from_department: curDept, to_department: next ?? curDept,
     });
     await audit(userId, "orders", "delivered", data.orderId, { dept: curDept }, { dept: next ?? curDept });
+    await appendOrderBackup({ order, userId, action: "delivered" });
     return { order };
   });
 
